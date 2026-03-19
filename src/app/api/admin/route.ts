@@ -151,5 +151,26 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  // ── End game ───────────────────────────────────────────────────────────
+  if (body.action === "end_game") {
+    const scoreA = gs.score_a ?? 0;
+    const scoreB = gs.score_b ?? 0;
+    const winner = scoreA > scoreB ? "A" : scoreB > scoreA ? "B" : null;
+
+    actionLog.push({ type: "admin", description: `Ended game. Final score: ${scoreA}-${scoreB}. Winner: ${winner ? `Team ${winner}` : "Tie"}`, timestamp });
+
+    const { error } = await supabase.from("game_states").update({
+      phase: "finished",
+      winner,
+      action_log: actionLog,
+    }).eq("id", gs.id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Update room status
+    await supabase.from("rooms").update({ status: "finished" }).eq("id", gs.room_id);
+
+    return NextResponse.json({ ok: true });
+  }
+
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }

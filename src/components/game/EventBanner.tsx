@@ -29,9 +29,24 @@ export default function EventBanner({ lastAsk, declaredSets, players }: EventBan
           `}
         >
           {(() => {
+            const isAdmin = lastDeclared.declared_by === "admin";
             const declarer = players.find((p) => p.id === lastDeclared.declared_by);
-            const name = declarer?.display_name ?? "?";
+            const name = isAdmin ? "Admin" : (declarer?.display_name ?? "?");
             const set = setLabel(lastDeclared.set_id);
+
+            if (isAdmin) {
+              return (
+                <span className="text-amber-300">
+                  <span className="font-medium text-amber-200">Admin</span>
+                  {" awarded "}
+                  <span className="font-medium text-amber-200">{set}</span>
+                  {lastDeclared.awarded_to
+                    ? <>{" to Team "}{lastDeclared.awarded_to}</>
+                    : " — nullified"
+                  }
+                </span>
+              );
+            }
 
             if (lastDeclared.was_correct) {
               return (

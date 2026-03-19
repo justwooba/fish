@@ -272,6 +272,14 @@ export default function AdminPage() {
                           className="text-[10px] px-2 py-1 rounded border border-white/[0.08] text-gray-400 hover:text-gray-200 hover:bg-white/[0.06] cursor-pointer transition-all">Change Turn</button>
                         <button onClick={() => setAwardSet(awardSet?.gsId === gs.id ? null : { gsId: gs.id })}
                           className="text-[10px] px-2 py-1 rounded border border-white/[0.08] text-gray-400 hover:text-gray-200 hover:bg-white/[0.06] cursor-pointer transition-all">Award Set</button>
+                        {gs.phase !== "finished" && (
+                          <button onClick={() => {
+                            if (confirm(`End game? Score: ${gs.score_a}-${gs.score_b}. Winner: ${gs.score_a > gs.score_b ? "Team A" : gs.score_b > gs.score_a ? "Team B" : "Tie"}`)) {
+                              adminPatch({ action: "end_game", game_state_id: gs.id });
+                            }
+                          }}
+                            className="text-[10px] px-2 py-1 rounded border border-red-500/20 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 cursor-pointer transition-all">End Game</button>
+                        )}
                       </div>
 
                       {changeTurn?.gsId === gs.id && (
