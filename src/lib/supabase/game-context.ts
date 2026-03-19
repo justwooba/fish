@@ -173,8 +173,7 @@ export async function saveGameState(
     .update({
       phase: finalState.phase,
       current_turn: finalState.current_turn,
-      // Don't write hands to game_states — use game_hands instead
-      hands: {}, // Empty object — hands live in game_hands now
+      hands: finalState.hands,
       last_ask: finalState.last_ask,
       declared_sets: finalState.declared_sets,
       score_a: finalState.score_a,
@@ -195,17 +194,6 @@ export async function saveGameState(
 
   if (!data) {
     return "Action conflict — please try again";
-  }
-
-  // Save hands to secure table (not published via realtime)
-  const { error: handsError } = await supabase.rpc("save_game_hands", {
-    game_id_input: finalState.id,
-    new_hands: finalState.hands,
-  });
-
-  if (handsError) {
-    console.error("Failed to save hands:", handsError);
-    // Non-fatal for now, but hands won't update
   }
 
   // Update card counts (cosmetic, non-blocking)
