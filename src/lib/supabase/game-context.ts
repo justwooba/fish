@@ -1,21 +1,28 @@
 import { ensureAuth } from "@/lib/supabase/auth";
 import type { Player, ServerGameState, RoomSettings } from "@/lib/types";
-import { findNextActivePlayer, getSeatOrder, determinePhaseForPlayer } from "@/lib/engine";
+import {
+  findNextActivePlayer,
+  getSeatOrder,
+  determinePhaseForPlayer,
+} from "@/lib/engine";
 
 export interface GameContext {
   userId: string;
   playerId: string;
-  gameState: ServerGameState;
+  gameState: ServerGameState & { version: number };
   players: Player[];
   settings: RoomSettings;
   roomId: string;
   supabase: Awaited<ReturnType<typeof ensureAuth>> extends infer T
-    ? T extends { supabase: infer S } ? S : never
+    ? T extends { supabase: infer S }
+      ? S
+      : never
     : never;
 }
 
 /**
  * Loads everything needed to process a game action.
+ * Hands are loaded from the separate game_hands table (not exposed via realtime).
  */
 export async function loadGameContext(
   roomId: string
@@ -27,55 +34,49 @@ export async function loadGameContext(
 
   const { userId, supabase } = auth;
 
-  // Load room
   const { data: room } = await supabase
     .from("rooms")
     .select("id, settings, status")
     .eq("id", roomId)
     .maybeSingle();
 
-  if (!room) {
-    return { error: "Room not found", status: 404 };
-  }
-
-  if (room.status !== "playing") {
+  if (!room) return { error: "Room not found", status: 404 };
+  if (room.status !== "playing" && room.status !== "finished") {
     return { error: "Game is not in progress", status: 400 };
   }
 
-  // Load game state
   const { data: gs } = await supabase
     .from("game_states")
     .select("*")
     .eq("room_id", roomId)
     .maybeSingle();
 
-  if (!gs) {
-    return { error: "Game state not found", status: 404 };
-  }
+  if (!gs) return { error: "Game state not found", status: 404 };
 
-  // Load players
   const { data: players } = await supabase
     .from("players")
     .select("*")
     .eq("room_id", roomId);
 
-  if (!players || players.length === 0) {
-    return { error: "No players found", status: 404 };
-  }
+  if (!players || players.length === 0) return { error: "No players found", status: 404 };
 
-  // Find this user's player record
   const player = players.find((p: Player) => p.user_id === userId);
-  if (!player) {
-    return { error: "You are not in this game", status: 403 };
-  }
+  if (!player) return { error: "You are not in this game", status: 403 };
 
-  // Reconstruct ServerGameState from DB row
-  const gameState: ServerGameState = {
+  // Load hands from separate secure table
+  const { data: handsData } = await supabase.rpc("get_game_hands", {
+    game_id_input: gs.id,
+  });
+
+  // Fall back to game_states.hands for backward compatibility
+  const hands = handsData || gs.hands || {};
+
+  const gameState: ServerGameState & { version: number } = {
     id: gs.id,
     room_id: gs.room_id,
     phase: gs.phase,
     current_turn: gs.current_turn,
-    hands: gs.hands,
+    hands,
     last_ask: gs.last_ask,
     declared_sets: gs.declared_sets,
     score_a: gs.score_a,
@@ -99,36 +100,55 @@ export async function loadGameContext(
 }
 
 /**
- * After any action, if the new current_turn player has zero cards,
- * skip forward to the next player who can act. This prevents the
- * game from getting stuck on empty-handed players.
+ * If the current turn player has no cards, advance to the next
+ * teammate who does. The turn stays with the same team.
  */
-export function skipEmptyPlayers(
+function skipEmptyPlayers(
   state: ServerGameState,
   players: Player[]
 ): ServerGameState {
-  // Only skip during asking/declaring phases, not choosing_turn or finished
   if (state.phase === "choosing_turn" || state.phase === "finished") {
     return state;
   }
 
   const hand = state.hands[state.current_turn];
-  if (hand && hand.length > 0) {
-    return state; // Current player has cards, no skip needed
+  if (hand && hand.length > 0) return state;
+
+  // Find the current player's team
+  const currentPlayer = players.find((p) => p.id === state.current_turn);
+  if (!currentPlayer || !currentPlayer.team) return state;
+
+  // Find teammates with cards
+  const teammatesWithCards = players
+    .filter((p) => p.team === currentPlayer.team && p.id !== state.current_turn)
+    .filter((p) => (state.hands[p.id]?.length ?? 0) > 0);
+
+  if (teammatesWithCards.length === 0) {
+    // No teammates have cards — fall back to any player with cards
+    const seatOrder = getSeatOrder(players);
+    const nextPlayer = findNextActivePlayer(state, seatOrder, state.current_turn);
+    if (!nextPlayer || nextPlayer === state.current_turn) return state;
+    const updated = { ...state, current_turn: nextPlayer };
+    updated.phase = determinePhaseForPlayer(updated, players, nextPlayer);
+    return updated;
   }
 
-  // Find next player with cards
+  // Pick the first teammate in seat order
   const seatOrder = getSeatOrder(players);
-  const nextPlayer = findNextActivePlayer(state, seatOrder, state.current_turn);
+  const startIdx = seatOrder.indexOf(state.current_turn);
+  let nextPlayer: string | null = null;
 
-  if (!nextPlayer) {
-    // Nobody has cards — game should be over
-    return state;
+  for (let offset = 1; offset < 6; offset++) {
+    const idx = (startIdx + offset) % 6;
+    const pid = seatOrder[idx];
+    const p = players.find((pl) => pl.id === pid);
+    if (p && p.team === currentPlayer.team && (state.hands[pid]?.length ?? 0) > 0) {
+      nextPlayer = pid;
+      break;
+    }
   }
 
-  if (nextPlayer === state.current_turn) {
-    return state; // No one else to skip to
-  }
+  if (!nextPlayer) return state;
 
   const updated = { ...state, current_turn: nextPlayer };
   updated.phase = determinePhaseForPlayer(updated, players, nextPlayer);
@@ -137,11 +157,7 @@ export function skipEmptyPlayers(
 
 /**
  * Persists an updated game state using optimistic locking.
- * Returns null on success, or an error string.
- *
- * The version check ensures that if two requests race, only the first
- * one succeeds. The second gets "State has changed" and the client
- * should re-fetch and retry (or just let the realtime update handle it).
+ * Hands are stored in the separate game_hands table (never in realtime).
  */
 export async function saveGameState(
   ctx: GameContext,
@@ -149,59 +165,73 @@ export async function saveGameState(
 ): Promise<string | null> {
   const { supabase } = ctx;
 
-  // Auto-skip empty-handed players before saving
   const finalState = skipEmptyPlayers(newState, ctx.players);
 
-  // Versioned update — only succeeds if version hasn't changed
-  const { data: success, error: rpcError } = await supabase.rpc(
-    "update_game_state_versioned",
-    {
-      game_id_input: finalState.id,
-      expected_version: ctx.gameState.version,
-      new_phase: finalState.phase,
-      new_current_turn: finalState.current_turn,
-      new_hands: finalState.hands,
-      new_last_ask: finalState.last_ask,
-      new_declared_sets: finalState.declared_sets,
-      new_score_a: finalState.score_a,
-      new_score_b: finalState.score_b,
-      new_action_log: finalState.action_log,
-      new_winner: finalState.winner,
-    }
-  );
+  // Optimistic lock: update only if version hasn't changed
+  const { data, error: updateError } = await supabase
+    .from("game_states")
+    .update({
+      phase: finalState.phase,
+      current_turn: finalState.current_turn,
+      // Don't write hands to game_states — use game_hands instead
+      hands: {}, // Empty object — hands live in game_hands now
+      last_ask: finalState.last_ask,
+      declared_sets: finalState.declared_sets,
+      score_a: finalState.score_a,
+      score_b: finalState.score_b,
+      action_log: finalState.action_log,
+      winner: finalState.winner,
+      version: ctx.gameState.version + 1,
+    })
+    .eq("id", finalState.id)
+    .eq("version", ctx.gameState.version)
+    .select("id")
+    .maybeSingle();
 
-  if (rpcError) {
-    console.error("Failed to save game state:", rpcError);
+  if (updateError) {
+    console.error("Failed to save game state:", updateError);
     return "Failed to save game state";
   }
 
-  if (success === false) {
-    return "State has changed — please try again";
+  if (!data) {
+    return "Action conflict — please try again";
   }
 
-  // Update card counts (non-blocking, cosmetic)
+  // Save hands to secure table (not published via realtime)
+  const { error: handsError } = await supabase.rpc("save_game_hands", {
+    game_id_input: finalState.id,
+    new_hands: finalState.hands,
+  });
+
+  if (handsError) {
+    console.error("Failed to save hands:", handsError);
+    // Non-fatal for now, but hands won't update
+  }
+
+  // Update card counts (cosmetic, non-blocking)
   const counts = Object.entries(finalState.hands).map(([playerId, hand]) => ({
     player_id: playerId,
     card_count: hand.length,
   }));
 
-  const { error: countError } = await supabase.rpc("update_card_counts", {
-    room_id_input: finalState.room_id,
-    counts,
-  });
-  if (countError) {
-    console.error("Failed to update card counts:", countError);
-  }
+  supabase
+    .rpc("update_card_counts", {
+      room_id_input: finalState.room_id,
+      counts,
+    })
+    .then(({ error }) => {
+      if (error) console.error("Failed to update card counts:", error);
+    });
 
   // If game is finished, update room status
   if (finalState.phase === "finished" && finalState.winner) {
-    const { error: roomError } = await supabase
+    supabase
       .from("rooms")
       .update({ status: "finished" })
-      .eq("id", finalState.room_id);
-    if (roomError) {
-      console.error("Failed to update room status:", roomError);
-    }
+      .eq("id", finalState.room_id)
+      .then(({ error }) => {
+        if (error) console.error("Failed to update room status:", error);
+      });
   }
 
   return null;
