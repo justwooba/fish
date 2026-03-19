@@ -24,6 +24,8 @@ interface GameData {
   players: PlayerInfo[];
   settings: RoomSettings | null;
   myPlayerId: string | null;
+  isHost: boolean;
+  roomCode: string | null;
   declaring: DeclaringIntent | null;
   loading: boolean;
   error: string | null;
@@ -36,6 +38,8 @@ export function useGame(roomId: string): GameData {
   const [settings, setSettings] = useState<RoomSettings | null>(null);
   const [declaring, setDeclaring] = useState<DeclaringIntent | null>(null);
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
+  const [isHost, setIsHost] = useState(false);
+  const [roomCode, setRoomCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -54,6 +58,8 @@ export function useGame(roomId: string): GameData {
       setPlayers(data.players);
       setSettings(data.settings);
       setDeclaring(data.declaring ?? null);
+      setIsHost(data.is_host ?? false);
+      setRoomCode(data.room_code ?? null);
       setError(null);
     } catch {
       setError("Failed to connect to game");
@@ -67,7 +73,6 @@ export function useGame(roomId: string): GameData {
     let cancelled = false;
 
     async function init() {
-      // Get user and find player ID
       let foundPlayerId: string | null = null;
 
       const { data: { user } } = await supabase.auth.getUser();
@@ -97,43 +102,34 @@ export function useGame(roomId: string): GameData {
       if (cancelled) return;
       setMyPlayerId(foundPlayerId);
 
-      // Fetch initial state
       await fetchState();
 
-      // ── Realtime: game state + player changes ──────────────────────
       const channel = supabase
         .channel(`game:${roomId}`)
         .on(
           "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "game_states",
-            filter: `room_id=eq.${roomId}`,
-          },
+          { event: "UPDATE", schema: "public", table: "game_states", filter: `room_id=eq.${roomId}` },
           () => { fetchState(); }
         )
         .on(
           "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "players",
-            filter: `room_id=eq.${roomId}`,
-          },
+          { event: "UPDATE", schema: "public", table: "players", filter: `room_id=eq.${roomId}` },
+          () => { fetchState(); }
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
           () => { fetchState(); }
         )
         .subscribe();
 
       channelRef.current = channel;
 
-      // ── Presence: track who's online ───────────────────────────────
       if (foundPlayerId) {
         const presenceChannel = supabase
           .channel(`presence:${roomId}`)
           .on("presence", { event: "sync" }, () => {
             const presenceState = presenceChannel.presenceState();
-            // Build a set of connected player IDs
             const connectedIds = new Set<string>();
             for (const key of Object.keys(presenceState)) {
               const presences = presenceState[key] as { player_id?: string }[];
@@ -141,12 +137,8 @@ export function useGame(roomId: string): GameData {
                 if (p.player_id) connectedIds.add(p.player_id);
               }
             }
-            // Update player connection status locally
             setPlayers((prev) =>
-              prev.map((p) => ({
-                ...p,
-                is_connected: connectedIds.has(p.id),
-              }))
+              prev.map((p) => ({ ...p, is_connected: connectedIds.has(p.id) }))
             );
           })
           .subscribe(async (status) => {
@@ -175,5 +167,5 @@ export function useGame(roomId: string): GameData {
     };
   }, [roomId, fetchState]);
 
-  return { game, players, settings, myPlayerId, declaring, loading, error, refetch: fetchState };
+  return { game, players, settings, myPlayerId, isHost, roomCode, declaring, loading, error, refetch: fetchState };
 }

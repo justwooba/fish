@@ -13,6 +13,8 @@ export interface GameContext {
   players: Player[];
   settings: RoomSettings;
   roomId: string;
+  roomCode: string;
+  hostId: string;
   supabase: Awaited<ReturnType<typeof ensureAuth>> extends infer T
     ? T extends { supabase: infer S }
       ? S
@@ -36,7 +38,7 @@ export async function loadGameContext(
 
   const { data: room } = await supabase
     .from("rooms")
-    .select("id, settings, status")
+    .select("id, code, host_id, settings, status")
     .eq("id", roomId)
     .maybeSingle();
 
@@ -94,6 +96,8 @@ export async function loadGameContext(
       players,
       settings: room.settings as RoomSettings,
       roomId,
+      roomCode: room.code,
+      hostId: room.host_id,
       supabase,
     },
   };

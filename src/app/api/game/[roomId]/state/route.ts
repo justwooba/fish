@@ -32,7 +32,6 @@ export async function GET(
     is_connected: p.is_connected,
   }));
 
-  // Get declaring intent from raw DB row
   const { data: gs } = await ctx.supabase
     .from("game_states")
     .select("declaring_player_id, declaring_set")
@@ -43,6 +42,8 @@ export async function GET(
     game: clientState,
     players: playerInfo,
     settings: ctx.settings,
+    is_host: ctx.userId === ctx.hostId,
+    room_code: ctx.roomCode,
     declaring: gs?.declaring_player_id ? {
       player_id: gs.declaring_player_id,
       set_id: gs.declaring_set,
