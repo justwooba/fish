@@ -160,6 +160,17 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
     );
   }
 
+  // If game is gone and we have a room code, we're about to redirect — show loading
+  const isRedirecting = !game && roomCode;
+
+  if (isRedirecting) {
+    return (
+      <main className="min-h-dvh flex items-center justify-center">
+        <div className="text-gray-500 text-sm animate-pulse">Returning to lobby...</div>
+      </main>
+    );
+  }
+
   if (error || !game || !myPlayerId) {
     return (
       <main className="min-h-dvh flex items-center justify-center px-4">

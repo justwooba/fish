@@ -51,6 +51,7 @@ export default function PlayerTable({
   const onSeatPositionsRef = useRef(onSeatPositions);
   onSeatPositionsRef.current = onSeatPositions;
 
+  // Update positions after render, on resize, and on scroll
   useEffect(() => {
     function updatePositions() {
       if (!onSeatPositionsRef.current) return;
@@ -70,9 +71,11 @@ export default function PlayerTable({
 
     const t = setTimeout(updatePositions, 100);
     window.addEventListener("resize", updatePositions);
+    window.addEventListener("scroll", updatePositions, true);
     return () => {
       clearTimeout(t);
       window.removeEventListener("resize", updatePositions);
+      window.removeEventListener("scroll", updatePositions, true);
     };
   }, [players]);
 
