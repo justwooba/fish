@@ -91,10 +91,10 @@ export type RoomSettings = {
 };
 
 export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
-  team_declare: false,
-  nullify_misdeclare: false,
+  team_declare: true,
+  nullify_misdeclare: true,
   no_turn_on_misdeclare: false,
-  play_all_sets: false,
+  play_all_sets: true,
 };
 
 // ─── Room ────────────────────────────────────────────────────────────────────
