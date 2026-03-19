@@ -86,6 +86,7 @@ export async function PATCH(request: NextRequest) {
     const { error } = await supabase.from("game_states").update({
       current_turn: player_id,
       phase: "asking",
+      turn_started_at: new Date().toISOString(),
       action_log: actionLog,
     }).eq("id", gs.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

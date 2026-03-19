@@ -7,6 +7,7 @@ interface GameTimerProps {
   turnStartedAt: string;
   endedAt: string | null;
   isFinished: boolean;
+  isChoosingTurn: boolean;
   currentTurnName: string;
 }
 
@@ -16,7 +17,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export default function GameTimer({ startedAt, turnStartedAt, endedAt, isFinished, currentTurnName }: GameTimerProps) {
+export default function GameTimer({ startedAt, turnStartedAt, endedAt, isFinished, isChoosingTurn, currentTurnName }: GameTimerProps) {
   const [now, setNow] = useState(Date.now());
   const [visible, setVisible] = useState(true);
 
@@ -29,6 +30,7 @@ export default function GameTimer({ startedAt, turnStartedAt, endedAt, isFinishe
   const endTime = endedAt ? new Date(endedAt).getTime() : now;
   const gameElapsed = Math.max(0, Math.floor((endTime - new Date(startedAt).getTime()) / 1000));
   const turnElapsed = Math.max(0, Math.floor(((isFinished ? endTime : now) - new Date(turnStartedAt).getTime()) / 1000));
+  const showTurnTimer = !isFinished && !isChoosingTurn;
 
   if (!visible) {
     return (
@@ -47,13 +49,16 @@ export default function GameTimer({ startedAt, turnStartedAt, endedAt, isFinishe
         <span className="text-gray-600">Game:</span>
         <span className="font-mono text-gray-300">{formatTime(gameElapsed)}</span>
       </div>
-      {!isFinished && (
+      {showTurnTimer && (
         <div className="flex items-center gap-1.5">
           <span className="text-gray-600">{currentTurnName}:</span>
           <span className={`font-mono ${turnElapsed > 30 ? "text-amber-400" : "text-gray-400"}`}>
             {formatTime(turnElapsed)}
           </span>
         </div>
+      )}
+      {isChoosingTurn && !isFinished && (
+        <span className="text-gray-600 text-[10px] italic">Choosing next player...</span>
       )}
       {isFinished && (
         <span className="text-gray-600">Final time: {formatTime(gameElapsed)}</span>

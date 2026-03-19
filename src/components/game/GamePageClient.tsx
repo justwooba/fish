@@ -204,6 +204,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
             turnStartedAt={game.turn_started_at ?? game.started_at}
             endedAt={game.ended_at ?? null}
             isFinished={isFinished}
+            isChoosingTurn={phase === "choosing_turn"}
             currentTurnName={currentTurnPlayer?.display_name ?? "?"}
           />
         )}
