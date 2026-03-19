@@ -76,7 +76,9 @@ export default function PlayerTable({
     };
   }, [players]);
 
-  function renderSeat(player: PlayerInfo, index: number) {
+  function renderSeat(player: PlayerInfo | undefined, index: number) {
+    if (!player) return <div ref={(el) => { seatRefs.current[index] = el; }} />;
+
     const isOpponent = player.team !== myTeam;
     const canSelect = selectableOpponents && isOpponent && player.card_count > 0;
 

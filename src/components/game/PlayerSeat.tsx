@@ -1,92 +1,201 @@
 "use client";
 
+import { useRef, useEffect } from "react";
 import type { PlayerInfo } from "@/hooks/useGame";
-import type { TeamId } from "@/lib/types";
+import type { DeclaredSet, TeamId } from "@/lib/types";
+import { setLabel } from "@/lib/cards";
+import PlayerSeat from "./PlayerSeat";
 
-interface PlayerSeatProps {
-  player: PlayerInfo;
-  isMe: boolean;
-  isCurrentTurn: boolean;
-  isSelected?: boolean;
-  onClick?: () => void;
-  selectable?: boolean;
+export interface SeatPositions {
+  [playerId: string]: { x: number; y: number };
 }
 
-const TEAM_COLORS: Record<TeamId, { bg: string; border: string; text: string; pulse: string; hoverBorder: string }> = {
-  A: { bg: "bg-sky-500/10", border: "border-sky-500/30", text: "text-sky-400", pulse: "border-sky-400/40", hoverBorder: "hover:border-sky-400/50" },
-  B: { bg: "bg-rose-500/10", border: "border-rose-500/30", text: "text-rose-400", pulse: "border-rose-400/40", hoverBorder: "hover:border-rose-400/50" },
-};
+interface PlayerTableProps {
+  players: PlayerInfo[];
+  myPlayerId: string;
+  myTeam: TeamId;
+  currentTurn: string;
+  declaredSets: DeclaredSet[];
+  selectableOpponents?: boolean;
+  selectedOpponent?: string | null;
+  onSelectOpponent?: (playerId: string) => void;
+  onSeatPositions?: (positions: SeatPositions) => void;
+}
 
-export default function PlayerSeat({
-  player,
-  isMe,
-  isCurrentTurn,
-  isSelected,
-  onClick,
-  selectable,
-}: PlayerSeatProps) {
-  const team = player.team as TeamId;
-  const colors = TEAM_COLORS[team] || { bg: "bg-white/5", border: "border-white/10", text: "text-gray-400", pulse: "border-white/20", hoverBorder: "hover:border-white/30" };
+export default function PlayerTable({
+  players,
+  myPlayerId,
+  myTeam,
+  currentTurn,
+  declaredSets,
+  selectableOpponents,
+  selectedOpponent,
+  onSelectOpponent,
+  onSeatPositions,
+}: PlayerTableProps) {
+  const sorted = [...players].sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0));
 
-  const isPulsing = selectable && !isSelected;
+  const myIndex = sorted.findIndex((p) => p.id === myPlayerId);
+  const rotated: PlayerInfo[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    rotated.push(sorted[(myIndex + i) % sorted.length]);
+  }
+
+  const teamASets = declaredSets.filter((ds) => ds.awarded_to === "A");
+  const teamBSets = declaredSets.filter((ds) => ds.awarded_to === "B");
+  const nullSets = declaredSets.filter((ds) => ds.awarded_to === null);
+
+  const seatRefs = useRef<(HTMLDivElement | null)[]>([null, null, null, null, null, null]);
+  const rotatedRef = useRef(rotated);
+  rotatedRef.current = rotated;
+  const onSeatPositionsRef = useRef(onSeatPositions);
+  onSeatPositionsRef.current = onSeatPositions;
+
+  useEffect(() => {
+    function updatePositions() {
+      if (!onSeatPositionsRef.current) return;
+      const positions: SeatPositions = {};
+      rotatedRef.current.forEach((player, i) => {
+        const el = seatRefs.current[i];
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          positions[player.id] = {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+          };
+        }
+      });
+      onSeatPositionsRef.current(positions);
+    }
+
+    const t = setTimeout(updatePositions, 100);
+    window.addEventListener("resize", updatePositions);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", updatePositions);
+    };
+  }, [players]);
+
+  function renderSeat(player: PlayerInfo | undefined, index: number) {
+    if (!player) return <div ref={(el) => { seatRefs.current[index] = el; }} />;
+
+    const isOpponent = player.team !== myTeam;
+    const canSelect = selectableOpponents && isOpponent && player.card_count > 0;
+
+    return (
+      <div ref={(el) => { seatRefs.current[index] = el; }}>
+        <PlayerSeat
+          player={player}
+          isMe={player.id === myPlayerId}
+          isCurrentTurn={currentTurn === player.id}
+          isSelected={selectedOpponent === player.id}
+          onClick={canSelect ? () => onSelectOpponent?.(player.id) : undefined}
+          selectable={canSelect}
+        />
+      </div>
+    );
+  }
+
+  const totalDeclared = teamASets.length + teamBSets.length + nullSets.length;
 
   return (
-    <button
-      onClick={onClick}
-      disabled={!selectable}
-      className={`
-        relative flex flex-col items-center gap-1 p-3 rounded-xl border
-        transition-all duration-200 min-w-[80px]
-        ${isSelected
-          ? "border-blue-400 bg-blue-500/15 ring-2 ring-blue-400/40 scale-105"
-          : isCurrentTurn
-            ? `${colors.border} ${colors.bg} ring-1 ring-amber-400/30`
-            : isPulsing
-              ? `${colors.border} ${colors.bg}`
-              : "border-white/[0.06] bg-white/[0.02]"
-        }
-        ${selectable
-          ? `hover:bg-white/[0.08] ${colors.hoverBorder} hover:scale-105 cursor-pointer`
-          : "cursor-default"
-        }
-      `}
-    >
-      {/* Pulsing ring in team color */}
-      {isPulsing && (
-        <div className={`absolute inset-0 rounded-xl border-2 ${colors.pulse} animate-pulse pointer-events-none`} />
+    <div className="relative w-full">
+      {selectableOpponents && !selectedOpponent && (
+        <p className="text-center text-xs text-blue-400/70 mb-2 animate-pulse">
+          Click an opponent to ask them for a card
+        </p>
       )}
 
-      {/* Turn indicator */}
-      {isCurrentTurn && (
-        <div className="absolute -top-1.5 left-1/2 -translate-x-1/2">
-          <div className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
-        </div>
-      )}
-
-      {/* Avatar */}
       <div
-        className={`
-          w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold
-          ${isMe ? "bg-amber-500/20 text-amber-400" : `${colors.bg} ${colors.text}`}
-        `}
+        className="grid items-center justify-items-center gap-x-1 gap-y-2"
+        style={{
+          gridTemplateColumns: "minmax(80px,1fr) minmax(80px,1fr) minmax(80px,1fr) minmax(80px,1fr)",
+          gridTemplateRows: "auto 1fr 1fr auto",
+        }}
       >
-        {player.display_name.charAt(0).toUpperCase()}
+        <div className="col-start-2 row-start-1 z-10">{renderSeat(rotated[2], 2)}</div>
+        <div className="col-start-3 row-start-1 z-10">{renderSeat(rotated[3], 3)}</div>
+        <div className="col-start-1 row-start-2 row-span-2 z-10">{renderSeat(rotated[1], 1)}</div>
+        <div className="col-start-4 row-start-2 row-span-2 z-10">{renderSeat(rotated[4], 4)}</div>
+
+        {/* ── Table surface ───────────────────────────────────────── */}
+        <div
+          className="
+            col-start-2 col-span-2 row-start-2 row-span-2
+            w-full h-full min-h-[120px]
+            rounded-[40%/50%]
+            bg-emerald-900/15 border border-emerald-800/25
+            flex flex-col items-center justify-center
+            px-4 py-3 gap-2
+          "
+        >
+          {/* Score chips on the table */}
+          {totalDeclared > 0 ? (
+            <div className="flex gap-3 items-start">
+              {/* Team A stack */}
+              {teamASets.length > 0 && (
+                <div className="flex flex-col items-center gap-0.5">
+                  <div className="flex items-center gap-1">
+                    <div className="w-5 h-5 rounded-full bg-sky-500/20 border border-sky-500/30 flex items-center justify-center">
+                      <span className="text-[9px] font-bold text-sky-400">{teamASets.length}</span>
+                    </div>
+                    <span className="text-[8px] text-sky-400/60 uppercase font-medium">A</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    {teamASets.map((ds, i) => (
+                      <span key={i} className="text-[8px] text-sky-400/50 leading-none">
+                        {setLabel(ds.set_id)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Center divider */}
+              {teamASets.length > 0 && teamBSets.length > 0 && (
+                <div className="w-px h-8 bg-white/[0.06] self-center" />
+              )}
+
+              {/* Team B stack */}
+              {teamBSets.length > 0 && (
+                <div className="flex flex-col items-center gap-0.5">
+                  <div className="flex items-center gap-1">
+                    <div className="w-5 h-5 rounded-full bg-rose-500/20 border border-rose-500/30 flex items-center justify-center">
+                      <span className="text-[9px] font-bold text-rose-400">{teamBSets.length}</span>
+                    </div>
+                    <span className="text-[8px] text-rose-400/60 uppercase font-medium">B</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    {teamBSets.map((ds, i) => (
+                      <span key={i} className="text-[8px] text-rose-400/50 leading-none">
+                        {setLabel(ds.set_id)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="text-[10px] text-emerald-700/40 uppercase tracking-widest font-medium">
+              Fish
+            </span>
+          )}
+
+          {/* Nullified sets */}
+          {nullSets.length > 0 && (
+            <div className="flex gap-1.5">
+              {nullSets.map((ds, i) => (
+                <span key={i} className="text-[7px] text-gray-600 line-through">
+                  {setLabel(ds.set_id)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="col-start-2 row-start-4 z-10">{renderSeat(rotated[0], 0)}</div>
+        <div className="col-start-3 row-start-4 z-10">{renderSeat(rotated[5], 5)}</div>
       </div>
-
-      {/* Name */}
-      <span className={`text-xs truncate max-w-[72px] ${isMe ? "text-amber-200" : "text-gray-300"}`}>
-        {isMe ? "You" : player.display_name}
-      </span>
-
-      {/* Card count */}
-      <span className="text-[10px] text-gray-600">
-        {player.card_count} card{player.card_count !== 1 ? "s" : ""}
-      </span>
-
-      {/* Team badge */}
-      <span className={`text-[9px] font-medium uppercase tracking-wider ${colors.text}`}>
-        Team {team}
-      </span>
-    </button>
+    </div>
   );
 }

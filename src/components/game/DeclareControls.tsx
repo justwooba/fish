@@ -37,7 +37,19 @@ export default function DeclareControls({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const teammates = players.filter((p) => p.team === myTeam);
+  // Sort teammates: me first, then clockwise from my seat
+  const allTeammates = players.filter((p) => p.team === myTeam);
+  const meSorted = allTeammates.filter((p) => p.id === myPlayerId);
+  const otherTeammates = allTeammates
+    .filter((p) => p.id !== myPlayerId)
+    .sort((a, b) => {
+      const mySeat = allTeammates.find((p) => p.id === myPlayerId)?.seat ?? 0;
+      // Sort by clockwise distance from my seat
+      const distA = ((a.seat ?? 0) - mySeat + 6) % 6;
+      const distB = ((b.seat ?? 0) - mySeat + 6) % 6;
+      return distA - distB;
+    });
+  const teammates = [...meSorted, ...otherTeammates];
   const mySetIds = setsInHand(myHand);
   const availableSets = FISH_SET_IDS.filter((id) => !declaredSetIds.includes(id));
 
@@ -127,14 +139,17 @@ export default function DeclareControls({
 
   if (step === "idle") {
     return (
-      <Button
-        variant="secondary"
-        size="md"
+      <button
         onClick={() => setStep("pick_set")}
-        className="w-full"
+        className="
+          w-full py-3 rounded-xl border border-dashed border-white/[0.1]
+          text-sm text-gray-400 hover:text-gray-200
+          hover:border-white/[0.2] hover:bg-white/[0.03]
+          transition-all cursor-pointer
+        "
       >
         Declare a Set
-      </Button>
+      </button>
     );
   }
 
@@ -310,7 +325,7 @@ export default function DeclareControls({
       {/* Submit */}
       {allAssigned.length === 6 && (
         <Button onClick={handleDeclare} loading={loading} size="md" className="w-fit">
-          Declare
+          Submit Declaration
         </Button>
       )}
 

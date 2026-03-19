@@ -1,4 +1,5 @@
 import GamePageClient from "@/components/game/GamePageClient";
+import ErrorBoundary from "@/components/ui/ErrorBoundary";
 
 interface GamePageProps {
   params: Promise<{ roomId: string }>;
@@ -6,5 +7,9 @@ interface GamePageProps {
 
 export default async function GamePage({ params }: GamePageProps) {
   const { roomId } = await params;
-  return <GamePageClient roomId={roomId} />;
+  return (
+    <ErrorBoundary>
+      <GamePageClient roomId={roomId} />
+    </ErrorBoundary>
+  );
 }

@@ -44,7 +44,6 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
     const curr = game.last_ask;
     const prev = prevLastAskRef.current;
 
-    // Check if this is a NEW successful ask (not the same one we already animated)
     const isNew = !prev
       || prev.asker_id !== curr.asker_id
       || prev.target_id !== curr.target_id
@@ -58,14 +57,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
         const id = ++flyIdCounter;
         setFlyingCards((prev) => [
           ...prev,
-          {
-            cardKey: curr.card,
-            fromX: fromPos.x,
-            fromY: fromPos.y,
-            toX: toPos.x,
-            toY: toPos.y,
-            id,
-          },
+          { cardKey: curr.card, fromX: fromPos.x, fromY: fromPos.y, toX: toPos.x, toY: toPos.y, id },
         ]);
       }
     }
@@ -89,17 +81,10 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
       const data = await res.json();
       throw new Error(data.error || "Ask failed");
     }
-    // After a successful ask, keep the same opponent selected.
-    // Set the default set to the same set we just asked from,
-    // unless we now have all cards in that set.
     const askedSet = getSetForCardKey(card);
-    // We don't have the updated hand yet (realtime will bring it),
-    // so just set the default and let AskControls figure it out.
     setDefaultSet(askedSet);
-    // Don't clear selectedOpponent — keep asking the same person
   }, [roomId]);
 
-  // When it's no longer our turn, clear selections
   useEffect(() => {
     if (game && game.current_turn !== myPlayerId) {
       setSelectedOpponent(null);
@@ -107,13 +92,10 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
     }
   }, [game?.current_turn, myPlayerId, game]);
 
-  // When the hand updates after a successful ask, check if we still have
-  // cards to ask from the default set. If not, clear it but keep opponent.
   useEffect(() => {
     if (defaultSet && game) {
       const askable = getCardKeysInSet(defaultSet).filter((ck) => !(game.my_hand ?? []).includes(ck));
       if (askable.length === 0) {
-        // We have all cards in this set now — clear default set
         setDefaultSet(null);
       }
     }
@@ -175,15 +157,14 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
   const isMyTeamsTurn = players.find((p) => p.id === game.current_turn)?.team === myTeam;
   const isFinished = game.phase === "finished";
 
-  // For choose_turn phase: find the last set that was actually awarded (not nullified)
   const lastDeclared = game.declared_sets[game.declared_sets.length - 1];
-  const choosingTeam: TeamId = lastDeclared?.awarded_to ?? 
+  const choosingTeam: TeamId = lastDeclared?.awarded_to ??
     (players.find((p) => p.id === game.current_turn)?.team as TeamId) ?? "A";
 
   const declaredSetIds = game.declared_sets.map((ds) => ds.set_id);
 
-  // Opponents are clickable when it's my turn to ask
   const canSelectOpponents = isMyTurn && game.phase === "asking";
+  const canAct = isMyTurn || (settings?.team_declare && isMyTeamsTurn && game.phase === "declaring");
 
   // ── Phase text ─────────────────────────────────────────────────────────
 
@@ -248,7 +229,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
           players={players}
         />
 
-        {/* Declaring intent banner — shown to everyone when someone is declaring */}
+        {/* Declaring intent banner */}
         {declaring && declaring.player_id !== myPlayerId && (
           <div className="w-full px-4 py-3 rounded-xl bg-amber-500/[0.08] border border-amber-500/20 text-center">
             <p className="text-sm text-amber-300">
@@ -275,8 +256,8 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                 myPlayerId={myPlayerId}
                 onChoose={handleChooseTurn}
               />
-            ) : isMyTurn || (settings?.team_declare && isMyTeamsTurn && game.phase === "declaring") ? (
-              <>
+            ) : canAct ? (
+              <div className="space-y-4">
                 {/* Ask controls — when opponent is selected */}
                 {game.phase === "asking" && isMyTurn && selectedOpponent && (
                   <AskControls
@@ -293,20 +274,23 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                   />
                 )}
 
-                {/* Declare controls */}
-                {(!selectedOpponent || game.phase === "declaring") && (
-                  <DeclareControls
-                    myHand={game.my_hand ?? []}
-                    myPlayerId={myPlayerId}
-                    myTeam={myTeam}
-                    players={players}
-                    declaredSetIds={declaredSetIds}
-                    roomId={roomId}
-                    forced={game.phase === "declaring"}
-                    onDeclare={handleDeclare}
-                  />
+                {/* Divider between ask and declare when both visible */}
+                {game.phase === "asking" && isMyTurn && selectedOpponent && (
+                  <div className="border-t border-white/[0.06]" />
                 )}
-              </>
+
+                {/* Declare controls — always visible on your turn */}
+                <DeclareControls
+                  myHand={game.my_hand ?? []}
+                  myPlayerId={myPlayerId}
+                  myTeam={myTeam}
+                  players={players}
+                  declaredSetIds={declaredSetIds}
+                  roomId={roomId}
+                  forced={game.phase === "declaring"}
+                  onDeclare={handleDeclare}
+                />
+              </div>
             ) : declaring && declaring.player_id !== myPlayerId ? (
               <div className="text-center py-6">
                 <p className="text-gray-400 text-sm">
