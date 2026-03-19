@@ -3,7 +3,7 @@
 import { useCallback, useState, useEffect, useRef } from "react";
 import { useGame } from "@/hooks/useGame";
 import type { CardKey, FishSetId, TeamId, LastAsk } from "@/lib/types";
-import { getSetForCardKey, getCardKeysInSet, setLabel } from "@/lib/cards";
+import { getSetForCardKey, getCardKeysInSet, setLabel, cardKeyLabel } from "@/lib/cards";
 import Scoreboard from "@/components/game/Scoreboard";
 import EventBanner from "@/components/game/EventBanner";
 import MyHand from "@/components/game/MyHand";
@@ -328,49 +328,85 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
             <h3 className="text-lg text-gray-200 mb-3" style={{ fontFamily: "var(--font-display)" }}>
               Game Log
             </h3>
-            <div className="space-y-1 max-h-64 overflow-y-auto text-xs text-gray-500">
+            <div className="space-y-0.5 max-h-80 overflow-y-auto">
               {game.action_log.map((action, i) => {
                 if (!action || !action.type) return null;
+                const turnNum = i + 1;
+
                 if (action.type === "ask") {
                   const asker = players?.find((p) => p.id === action.asker_id)?.display_name ?? "?";
                   const target = players?.find((p) => p.id === action.target_id)?.display_name ?? "?";
+                  const cardName = action.card ? cardKeyLabel(action.card) : "?";
                   return (
-                    <div key={i}>
-                      <span className="text-gray-400">{asker}</span>
-                      {" asked "}
-                      <span className="text-gray-400">{target}</span>
-                      {" for "}
-                      <span className="text-gray-400">{action.card ?? "?"}</span>
-                      {" — "}
-                      <span className={action.success ? "text-emerald-400" : "text-gray-600"}>
-                        {action.success ? "yes" : "no"}
-                      </span>
+                    <div key={i} className="flex gap-2 py-1 text-xs">
+                      <span className="text-gray-700 w-6 text-right shrink-0 font-mono">{turnNum}</span>
+                      <div>
+                        <span className="text-gray-300">{asker}</span>
+                        <span className="text-gray-600">{" → "}</span>
+                        <span className="text-gray-300">{target}</span>
+                        <span className="text-gray-600">{" for "}</span>
+                        <span className="text-gray-200 font-medium">{cardName}</span>
+                        <span className="text-gray-600">{" — "}</span>
+                        <span className={action.success
+                          ? "text-emerald-400 font-medium"
+                          : "text-gray-600"
+                        }>
+                          {action.success ? "✓ got it" : "✗ miss"}
+                        </span>
+                      </div>
                     </div>
                   );
                 }
+
                 if (action.type === "declare") {
                   const declarer = players?.find((p) => p.id === action.declarer_id)?.display_name ?? "?";
+                  const setName = action.set_id ? setLabel(action.set_id as FishSetId) : "?";
                   return (
-                    <div key={i}>
-                      <span className="text-gray-400">{declarer}</span>
-                      {" declared "}
-                      <span className="text-gray-400">{action.set_id ?? "?"}</span>
-                      {" — "}
-                      <span className={action.success ? "text-emerald-400" : "text-red-400"}>
-                        {action.success ? "correct" : "misdeclare"}
-                      </span>
-                      {action.awarded_to ? ` → Team ${action.awarded_to}` : " → nullified"}
+                    <div key={i} className="flex gap-2 py-1.5 text-xs">
+                      <span className="text-gray-700 w-6 text-right shrink-0 font-mono">{turnNum}</span>
+                      <div className={`
+                        rounded-md px-2 py-1 -mx-1
+                        ${action.success
+                          ? "bg-emerald-500/[0.06] border border-emerald-500/10"
+                          : action.awarded_to === null
+                            ? "bg-gray-500/[0.06] border border-gray-500/10"
+                            : "bg-red-500/[0.06] border border-red-500/10"
+                        }
+                      `}>
+                        <span className="text-gray-300">{declarer}</span>
+                        <span className="text-gray-600">{" declared "}</span>
+                        <span className="text-gray-200 font-medium">{setName}</span>
+                        <span className="text-gray-600">{" — "}</span>
+                        {action.success ? (
+                          <span className="text-emerald-400 font-medium">
+                            ✓ correct → Team {action.awarded_to}
+                          </span>
+                        ) : action.awarded_to === null ? (
+                          <span className="text-gray-500">
+                            nullified
+                          </span>
+                        ) : (
+                          <span className="text-red-400 font-medium">
+                            ✗ misdeclare → Team {action.awarded_to}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 }
+
                 if (action.type === "choose_turn") {
                   const chosen = players?.find((p) => p.id === action.chosen_player_id)?.display_name ?? "?";
                   return (
-                    <div key={i}>
-                      Team {action.team} chose <span className="text-gray-400">{chosen}</span> to go next
+                    <div key={i} className="flex gap-2 py-1 text-xs">
+                      <span className="text-gray-700 w-6 text-right shrink-0 font-mono">{turnNum}</span>
+                      <div className="text-gray-600 italic">
+                        Team {action.team} chose <span className="text-gray-400 not-italic">{chosen}</span> to go next
+                      </div>
                     </div>
                   );
                 }
+
                 return null;
               })}
             </div>
