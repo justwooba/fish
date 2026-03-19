@@ -50,7 +50,7 @@ export async function POST(
       { status: 400 }
     );
   }
-
+  //
   // Assign seats: alternate teams around the table
   // Sort by team then by join order, then interleave A-B-A-B-A-B
   const teamA = players.filter((p: Player) => p.team === "A");

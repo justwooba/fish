@@ -111,11 +111,21 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
 
   // ── Redirect to lobby when room resets (for non-host players) ──────────
   useEffect(() => {
-    if (game === null && !loading && !error && roomCode) {
+    if (!loading && roomCode && game === null) {
       // Game state was deleted (reset) — go back to lobby
       router.push(`/room/${roomCode}`);
     }
-  }, [game, loading, error, roomCode, router]);
+  }, [game, loading, roomCode, router]);
+
+  // Also redirect if error indicates game no longer exists
+  useEffect(() => {
+    if (!loading && roomCode && error && (
+      error.includes("not in progress") ||
+      error.includes("not found")
+    )) {
+      router.push(`/room/${roomCode}`);
+    }
+  }, [error, loading, roomCode, router]);
 
   // ── Clear selections when turn changes ─────────────────────────────────
   useEffect(() => {

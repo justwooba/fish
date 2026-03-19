@@ -610,6 +610,31 @@ export function performDeclaration(
   if (gameOverResult) {
     next.phase = "finished";
     next.winner = gameOverResult;
+  } else if (nextPhase === "choosing_turn" && awardedTo) {
+    // Check if the winning team has any players with cards to choose from
+    const winningTeamPids = players
+      .filter((p) => p.team === awardedTo)
+      .map((p) => p.id);
+    const winningTeamHasCards = winningTeamPids.some(
+      (pid) => (next.hands[pid]?.length ?? 0) > 0
+    );
+
+    if (!winningTeamHasCards) {
+      // Winning team has no cards — skip choosing_turn, give turn to
+      // the other team's next player with cards
+      next.phase = "asking";
+      const otherTeamPids = players
+        .filter((p) => p.team !== awardedTo)
+        .map((p) => p.id);
+      const nextWithCards = otherTeamPids.find(
+        (pid) => (next.hands[pid]?.length ?? 0) > 0
+      );
+      if (nextWithCards) {
+        next.current_turn = nextWithCards;
+        next.phase = determinePhaseForPlayer(next, players, nextWithCards);
+      }
+    }
+    // else: choosing_turn proceeds normally
   } else if (nextPhase === "asking") {
     // If we're continuing play, check if current player must declare
     next.phase = determinePhaseForPlayer(next, players, next.current_turn);

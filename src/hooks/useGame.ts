@@ -51,6 +51,7 @@ export function useGame(roomId: string): GameData {
       if (!res.ok) {
         const data = await res.json();
         setError(data.error || "Failed to load game");
+        setGame(null); // Clear game so redirect logic can detect reset
         return;
       }
       const data = await res.json();

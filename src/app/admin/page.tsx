@@ -60,7 +60,13 @@ export default function AdminPage() {
     fetchData();
   }
 
-  useEffect(() => { if (authed) { const i = setInterval(fetchData, 10000); return () => clearInterval(i); } }, [authed, fetchData]);
+  // Client-side timer refresh (no API calls, just re-renders the elapsed times)
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!authed) return;
+    const i = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(i);
+  }, [authed]);
 
   if (!authed) {
     return (
@@ -239,10 +245,16 @@ export default function AdminPage() {
                         <span>v{gs.version}</span>
                         {gs.winner && <span>Winner: <span className="text-amber-400">Team {gs.winner}</span></span>}
                         {gs.started_at && (
-                          <span>Elapsed: <span className="text-gray-300 font-mono">{(() => {
+                          <span>Game: <span className="text-gray-300 font-mono">{(() => {
                             const start = new Date(gs.started_at).getTime();
                             const end = gs.ended_at ? new Date(gs.ended_at).getTime() : Date.now();
                             const sec = Math.floor((end - start) / 1000);
+                            return `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, "0")}`;
+                          })()}</span></span>
+                        )}
+                        {gs.turn_started_at && !gs.ended_at && gs.phase !== "choosing_turn" && (
+                          <span>Turn: <span className="text-amber-300 font-mono">{(() => {
+                            const sec = Math.floor((Date.now() - new Date(gs.turn_started_at).getTime()) / 1000);
                             return `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, "0")}`;
                           })()}</span></span>
                         )}
