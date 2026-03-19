@@ -72,8 +72,7 @@ export default function Home() {
               </p>
               <p>
                 When your team has a complete set, declare it for a point.
-                First team to five sets wins. Memory, deduction, and teamwork
-                are everything.
+                First team to five sets wins. 
               </p>
             </div>
           </div>
