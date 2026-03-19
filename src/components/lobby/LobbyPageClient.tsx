@@ -231,8 +231,18 @@ export default function LobbyPageClient({ roomCode }: LobbyPageClientProps) {
           />
         </div>
 
-        {/* Unassigned */}
+        {/* Start button */}
         <div className="w-full animate-fade-up delay-2">
+          <StartGameButton
+            players={players}
+            isHost={isHost}
+            onStart={handleStartGame}
+            loading={startLoading}
+          />
+        </div>
+
+        {/* Unassigned */}
+        <div className="w-full animate-fade-up delay-3">
           <UnassignedPlayers
             players={players}
             currentUserId={currentUserId ?? ""}
@@ -243,21 +253,11 @@ export default function LobbyPageClient({ roomCode }: LobbyPageClientProps) {
         </div>
 
         {/* Settings */}
-        <div className="w-full animate-fade-up delay-3">
+        <div className="w-full animate-fade-up delay-4">
           <RoomSettingsPanel
             settings={room.settings}
             onChange={handleSettingsChange}
             isHost={isHost}
-          />
-        </div>
-
-        {/* Start button */}
-        <div className="w-full animate-fade-up delay-4">
-          <StartGameButton
-            players={players}
-            isHost={isHost}
-            onStart={handleStartGame}
-            loading={startLoading}
           />
         </div>
 
