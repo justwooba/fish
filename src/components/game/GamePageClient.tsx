@@ -4,7 +4,6 @@ import { useCallback, useState, useEffect, useRef } from "react";
 import { useGame } from "@/hooks/useGame";
 import type { CardKey, FishSetId, TeamId, LastAsk } from "@/lib/types";
 import { getSetForCardKey, getCardKeysInSet, setLabel } from "@/lib/cards";
-import { setsInHand } from "@/lib/cards";
 import Scoreboard from "@/components/game/Scoreboard";
 import EventBanner from "@/components/game/EventBanner";
 import MyHand from "@/components/game/MyHand";
@@ -38,7 +37,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
   const [flyingCards, setFlyingCards] = useState<FlyingCard[]>([]);
   const prevLastAskRef = useRef<LastAsk | null>(null);
 
-  // ── Detect new successful asks and trigger fly animation ───────────────
+  // ── Fly animation on successful ask ────────────────────────────────────
   useEffect(() => {
     if (!game?.last_ask) return;
     const curr = game.last_ask;
@@ -52,7 +51,6 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
     if (isNew && curr.success) {
       const fromPos = seatPositions[curr.target_id];
       const toPos = seatPositions[curr.asker_id];
-
       if (fromPos && toPos) {
         const id = ++flyIdCounter;
         setFlyingCards((prev) => [
@@ -69,7 +67,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
     setFlyingCards((prev) => prev.filter((fc) => fc.id !== id));
   }
 
-  // ── API action helpers ─────────────────────────────────────────────────
+  // ── API helpers ────────────────────────────────────────────────────────
 
   const handleAsk = useCallback(async (targetId: string, card: CardKey) => {
     const res = await fetch(`/api/game/${roomId}/ask`, {
@@ -81,25 +79,8 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
       const data = await res.json();
       throw new Error(data.error || "Ask failed");
     }
-    const askedSet = getSetForCardKey(card);
-    setDefaultSet(askedSet);
+    setDefaultSet(getSetForCardKey(card));
   }, [roomId]);
-
-  useEffect(() => {
-    if (game && game.current_turn !== myPlayerId) {
-      setSelectedOpponent(null);
-      setDefaultSet(null);
-    }
-  }, [game?.current_turn, myPlayerId, game]);
-
-  useEffect(() => {
-    if (defaultSet && game) {
-      const askable = getCardKeysInSet(defaultSet).filter((ck) => !(game.my_hand ?? []).includes(ck));
-      if (askable.length === 0) {
-        setDefaultSet(null);
-      }
-    }
-  }, [game?.my_hand, defaultSet, game]);
 
   const handleDeclare = useCallback(async (setId: FishSetId, assignments: Record<string, CardKey[]>) => {
     const res = await fetch(`/api/game/${roomId}/declare`, {
@@ -125,6 +106,23 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
     }
   }, [roomId]);
 
+  // ── Clear selections when turn changes ─────────────────────────────────
+  useEffect(() => {
+    if (game && game.current_turn !== myPlayerId) {
+      setSelectedOpponent(null);
+      setDefaultSet(null);
+    }
+  }, [game?.current_turn, myPlayerId, game]);
+
+  // ── Clear default set when we have all cards in it ─────────────────────
+  useEffect(() => {
+    if (defaultSet && game) {
+      const myHand = game.my_hand ?? [];
+      const askable = getCardKeysInSet(defaultSet).filter((ck) => !myHand.includes(ck));
+      if (askable.length === 0) setDefaultSet(null);
+    }
+  }, [game?.my_hand, defaultSet, game]);
+
   // ── Loading / Error ────────────────────────────────────────────────────
 
   if (loading) {
@@ -149,42 +147,44 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
     );
   }
 
-  // ── Derived state ──────────────────────────────────────────────────────
+  // ── Derived state (all with safe fallbacks) ────────────────────────────
 
-  const me = players.find((p) => p.id === myPlayerId);
+  const me = players?.find((p) => p.id === myPlayerId);
   const myTeam = (me?.team as TeamId) ?? "A";
+  const myHand = game.my_hand ?? [];
+  const phase = game.phase ?? "asking";
+  const isFinished = phase === "finished";
   const isMyTurn = game.current_turn === myPlayerId;
-  const isMyTeamsTurn = players.find((p) => p.id === game.current_turn)?.team === myTeam;
-  const isFinished = game.phase === "finished";
+  const currentTurnPlayer = players?.find((p) => p.id === game.current_turn);
+  const isMyTeamsTurn = currentTurnPlayer?.team === myTeam;
 
-  const lastDeclared = game.declared_sets[game.declared_sets.length - 1];
+  const declaredSets = game.declared_sets ?? [];
+  const lastDeclared = declaredSets.length > 0 ? declaredSets[declaredSets.length - 1] : null;
   const choosingTeam: TeamId = lastDeclared?.awarded_to ??
-    (players.find((p) => p.id === game.current_turn)?.team as TeamId) ?? "A";
+    (currentTurnPlayer?.team as TeamId) ?? "A";
 
-  const declaredSetIds = game.declared_sets.map((ds) => ds.set_id);
+  const declaredSetIds = declaredSets.map((ds) => ds.set_id);
 
-  const canSelectOpponents = isMyTurn && game.phase === "asking";
-  const canAct = isMyTurn || (settings?.team_declare && isMyTeamsTurn && game.phase === "declaring");
+  const canSelectOpponents = !isFinished && isMyTurn && phase === "asking";
+  const canAct = !isFinished && (isMyTurn || (settings?.team_declare && isMyTeamsTurn && phase === "declaring"));
 
   // ── Phase text ─────────────────────────────────────────────────────────
 
   let phaseText = "";
   if (isFinished) {
     phaseText = game.winner ? `Team ${game.winner} wins!` : "Game over";
-  } else if (game.phase === "choosing_turn") {
-    const myTeamIsChoosing = choosingTeam === myTeam;
-    phaseText = myTeamIsChoosing
+  } else if (phase === "choosing_turn") {
+    phaseText = choosingTeam === myTeam
       ? "Your team picks who goes next"
       : `Team ${choosingTeam} is choosing...`;
   } else if (isMyTurn) {
-    phaseText = game.phase === "declaring"
+    phaseText = phase === "declaring"
       ? "You must declare a set — you have no legal asks"
       : selectedOpponent
         ? ""
         : "Your turn — click an opponent to ask, or declare a set";
   } else {
-    const turnPlayer = players.find((p) => p.id === game.current_turn);
-    phaseText = `${turnPlayer?.display_name ?? "?"}'s turn`;
+    phaseText = `${currentTurnPlayer?.display_name ?? "?"}'s turn`;
   }
 
   // ── Render ─────────────────────────────────────────────────────────────
@@ -195,46 +195,48 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
 
         {/* Scoreboard */}
         <Scoreboard
-          scoreA={game.score_a}
-          scoreB={game.score_b}
+          scoreA={game.score_a ?? 0}
+          scoreB={game.score_b ?? 0}
           winner={game.winner}
         />
 
         {/* Phase indicator */}
         {phaseText && (
           <div className="text-center">
-            <p className={`text-sm font-medium ${isMyTurn ? "text-amber-400" : "text-gray-400"}`}>
+            <p className={`text-sm font-medium ${isMyTurn && !isFinished ? "text-amber-400" : "text-gray-400"}`}>
               {phaseText}
             </p>
           </div>
         )}
 
-        {/* Players around the table */}
-        <PlayerTable
-          players={players}
-          myPlayerId={myPlayerId}
-          myTeam={myTeam}
-          currentTurn={game.current_turn}
-          declaredSets={game.declared_sets}
-          selectableOpponents={canSelectOpponents}
-          selectedOpponent={selectedOpponent}
-          onSelectOpponent={setSelectedOpponent}
-          onSeatPositions={setSeatPositions}
-        />
+        {/* Players */}
+        {players && players.length > 0 && (
+          <PlayerTable
+            players={players}
+            myPlayerId={myPlayerId}
+            myTeam={myTeam}
+            currentTurn={game.current_turn ?? ""}
+            declaredSets={declaredSets}
+            selectableOpponents={canSelectOpponents}
+            selectedOpponent={selectedOpponent}
+            onSelectOpponent={setSelectedOpponent}
+            onSeatPositions={setSeatPositions}
+          />
+        )}
 
         {/* Event banners */}
         <EventBanner
           lastAsk={game.last_ask}
-          declaredSets={game.declared_sets}
-          players={players}
+          declaredSets={declaredSets}
+          players={players ?? []}
         />
 
         {/* Declaring intent banner */}
-        {declaring && declaring.player_id !== myPlayerId && (
+        {declaring && declaring.player_id !== myPlayerId && !isFinished && (
           <div className="w-full px-4 py-3 rounded-xl bg-amber-500/[0.08] border border-amber-500/20 text-center">
             <p className="text-sm text-amber-300">
               <span className="font-medium text-amber-200">
-                {players.find((p) => p.id === declaring.player_id)?.display_name ?? "?"}
+                {players?.find((p) => p.id === declaring.player_id)?.display_name ?? "?"}
               </span>
               {" is declaring "}
               <span className="font-medium text-amber-200">
@@ -248,22 +250,21 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
         {/* Action area */}
         {!isFinished && (
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-            {game.phase === "choosing_turn" ? (
+            {phase === "choosing_turn" ? (
               <ChooseTurnControls
                 myTeam={myTeam}
                 choosingTeam={choosingTeam}
-                players={players}
+                players={players ?? []}
                 myPlayerId={myPlayerId}
                 onChoose={handleChooseTurn}
               />
             ) : canAct ? (
               <div className="space-y-4">
-                {/* Ask controls — when opponent is selected */}
-                {game.phase === "asking" && isMyTurn && selectedOpponent && (
+                {phase === "asking" && isMyTurn && selectedOpponent && (
                   <AskControls
-                    myHand={game.my_hand ?? []}
+                    myHand={myHand}
                     myPlayerId={myPlayerId}
-                    players={players}
+                    players={players ?? []}
                     selectedTarget={selectedOpponent}
                     defaultSet={defaultSet}
                     onAsk={handleAsk}
@@ -274,20 +275,18 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                   />
                 )}
 
-                {/* Divider between ask and declare when both visible */}
-                {game.phase === "asking" && isMyTurn && selectedOpponent && (
+                {phase === "asking" && isMyTurn && selectedOpponent && (
                   <div className="border-t border-white/[0.06]" />
                 )}
 
-                {/* Declare controls — always visible on your turn */}
                 <DeclareControls
-                  myHand={game.my_hand ?? []}
+                  myHand={myHand}
                   myPlayerId={myPlayerId}
                   myTeam={myTeam}
-                  players={players}
+                  players={players ?? []}
                   declaredSetIds={declaredSetIds}
                   roomId={roomId}
-                  forced={game.phase === "declaring"}
+                  forced={phase === "declaring"}
                   onDeclare={handleDeclare}
                 />
               </div>
@@ -295,7 +294,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
               <div className="text-center py-6">
                 <p className="text-gray-400 text-sm">
                   <span className="text-gray-300 font-medium">
-                    {players.find((p) => p.id === declaring.player_id)?.display_name ?? "?"}
+                    {players?.find((p) => p.id === declaring.player_id)?.display_name ?? "?"}
                   </span>
                   {" is declaring "}
                   <span className="text-gray-300 font-medium">
@@ -309,7 +308,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                 <p className="text-gray-500 text-sm">
                   Waiting for{" "}
                   <span className="text-gray-300">
-                    {players.find((p) => p.id === game.current_turn)?.display_name ?? "?"}
+                    {currentTurnPlayer?.display_name ?? "?"}
                   </span>
                   {" "}to play...
                 </p>
@@ -320,27 +319,28 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
 
         {/* My hand */}
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-          <MyHand hand={game.my_hand ?? []} />
+          <MyHand hand={myHand} />
         </div>
 
         {/* Postgame log */}
-        {isFinished && game.action_log && (
+        {isFinished && Array.isArray(game.action_log) && game.action_log.length > 0 && (
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
             <h3 className="text-lg text-gray-200 mb-3" style={{ fontFamily: "var(--font-display)" }}>
               Game Log
             </h3>
             <div className="space-y-1 max-h-64 overflow-y-auto text-xs text-gray-500">
               {game.action_log.map((action, i) => {
+                if (!action || !action.type) return null;
                 if (action.type === "ask") {
-                  const asker = players.find((p) => p.id === action.asker_id)?.display_name ?? "?";
-                  const target = players.find((p) => p.id === action.target_id)?.display_name ?? "?";
+                  const asker = players?.find((p) => p.id === action.asker_id)?.display_name ?? "?";
+                  const target = players?.find((p) => p.id === action.target_id)?.display_name ?? "?";
                   return (
                     <div key={i}>
                       <span className="text-gray-400">{asker}</span>
                       {" asked "}
                       <span className="text-gray-400">{target}</span>
                       {" for "}
-                      <span className="text-gray-400">{action.card}</span>
+                      <span className="text-gray-400">{action.card ?? "?"}</span>
                       {" — "}
                       <span className={action.success ? "text-emerald-400" : "text-gray-600"}>
                         {action.success ? "yes" : "no"}
@@ -349,12 +349,12 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                   );
                 }
                 if (action.type === "declare") {
-                  const declarer = players.find((p) => p.id === action.declarer_id)?.display_name ?? "?";
+                  const declarer = players?.find((p) => p.id === action.declarer_id)?.display_name ?? "?";
                   return (
                     <div key={i}>
                       <span className="text-gray-400">{declarer}</span>
                       {" declared "}
-                      <span className="text-gray-400">{action.set_id}</span>
+                      <span className="text-gray-400">{action.set_id ?? "?"}</span>
                       {" — "}
                       <span className={action.success ? "text-emerald-400" : "text-red-400"}>
                         {action.success ? "correct" : "misdeclare"}
@@ -364,7 +364,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                   );
                 }
                 if (action.type === "choose_turn") {
-                  const chosen = players.find((p) => p.id === action.chosen_player_id)?.display_name ?? "?";
+                  const chosen = players?.find((p) => p.id === action.chosen_player_id)?.display_name ?? "?";
                   return (
                     <div key={i}>
                       Team {action.team} chose <span className="text-gray-400">{chosen}</span> to go next
@@ -383,7 +383,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
         </div>
       </div>
 
-      {/* Flying card animations */}
+      {/* Flying cards */}
       {flyingCards.map((fc) => (
         <CardFlyAnimation
           key={fc.id}
