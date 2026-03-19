@@ -110,22 +110,29 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
   }, [roomId, router]);
 
   // ── Redirect to lobby when room resets (for non-host players) ──────────
+  const hasRedirectedRef = useRef(false);
   useEffect(() => {
-    if (!loading && roomCode && game === null) {
-      // Game state was deleted (reset) — go back to lobby
-      router.push(`/room/${roomCode}`);
-    }
-  }, [game, loading, roomCode, router]);
+    // Don't redirect if game is finished — that's normal end state, not a reset
+    if (game && game.phase === "finished") return;
+    // Don't redirect if still loading initial state
+    if (loading) return;
+    // Need a roomCode to redirect to
+    if (!roomCode) return;
+    // Already redirected
+    if (hasRedirectedRef.current) return;
 
-  // Also redirect if error indicates game no longer exists
-  useEffect(() => {
-    if (!loading && roomCode && error && (
-      error.includes("not in progress") ||
-      error.includes("not found")
-    )) {
-      router.push(`/room/${roomCode}`);
+    const shouldRedirect = game === null || (
+      error && (error.includes("not in progress") || error.includes("not found"))
+    );
+
+    if (shouldRedirect) {
+      hasRedirectedRef.current = true;
+      // Small delay to avoid React render cycle conflicts
+      setTimeout(() => {
+        router.push(`/room/${roomCode}`);
+      }, 100);
     }
-  }, [error, loading, roomCode, router]);
+  }, [game, loading, error, roomCode, router]);
 
   // ── Clear selections when turn changes ─────────────────────────────────
   useEffect(() => {
