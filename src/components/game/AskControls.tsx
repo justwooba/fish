@@ -6,7 +6,16 @@ import type { PlayerInfo } from "@/hooks/useGame";
 import { getCardKeysInSet, setLabel, cardKeyLabel } from "@/lib/cards";
 import { setsInHand } from "@/lib/cards";
 import Button from "@/components/ui/Button";
-import CardDisplay from "./CardDisplay";
+
+const SUIT_SYMBOLS: Record<string, string> = {
+  spades: "♠", hearts: "♥", diamonds: "♦", clubs: "♣",
+};
+const SUIT_COLORS: Record<string, { text: string; bg: string; border: string }> = {
+  spades: { text: "text-gray-200", bg: "bg-gray-500/10", border: "border-gray-500/20" },
+  clubs: { text: "text-gray-200", bg: "bg-gray-500/10", border: "border-gray-500/20" },
+  hearts: { text: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
+  diamonds: { text: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
+};
 
 interface AskControlsProps {
   myHand: CardKey[];
@@ -27,29 +36,21 @@ export default function AskControls({
   onAsk,
   onCancelTarget,
 }: AskControlsProps) {
-  const [selectedSet, setSelectedSet] = useState<FishSetId | null>(defaultSet ?? null);
   const [selectedCard, setSelectedCard] = useState<CardKey | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Track if defaultSet changes (after a successful ask)
+  // When defaultSet changes (after successful ask), clear selection
   const prevDefault = useRef(defaultSet);
   useEffect(() => {
     if (defaultSet !== prevDefault.current) {
       prevDefault.current = defaultSet;
-      if (defaultSet) {
-        setSelectedSet(defaultSet);
-        setSelectedCard(null);
-      }
+      setSelectedCard(null);
     }
   }, [defaultSet]);
 
   const targetPlayer = players?.find((p) => p.id === selectedTarget);
   const mySets = setsInHand(myHand);
-
-  const askableCards = selectedSet
-    ? getCardKeysInSet(selectedSet).filter((ck) => !myHand.includes(ck))
-    : [];
 
   async function handleAsk() {
     if (!selectedCard) return;
@@ -58,7 +59,6 @@ export default function AskControls({
     try {
       await onAsk(selectedTarget, selectedCard);
       setSelectedCard(null);
-      // Don't clear selectedSet — parent will update defaultSet
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ask failed");
     } finally {
@@ -79,7 +79,6 @@ export default function AskControls({
         <button
           onClick={() => {
             onCancelTarget();
-            setSelectedSet(null);
             setSelectedCard(null);
             setError("");
           }}
@@ -88,68 +87,115 @@ export default function AskControls({
           Change
         </button>
       </div>
-      <p className="text-[10px] text-gray-600 -mt-2">Or click another opponent on the table</p>
+      <p className="text-[10px] text-gray-600 -mt-2">
+        Click a missing card to ask for it
+      </p>
 
-      {/* Pick set */}
-      <div>
-        <p className="text-xs text-gray-500 mb-2">Choose a set</p>
-        <div className="flex flex-wrap gap-1.5">
-          {mySets.map((setId) => (
-            <button
-              key={setId}
-              onClick={() => {
-                setSelectedSet(setId);
-                setSelectedCard(null);
-                setError("");
-              }}
-              className={`
-                text-xs px-3 py-1.5 rounded-lg border transition-all cursor-pointer
-                ${selectedSet === setId
-                  ? "border-blue-400 bg-blue-500/15 text-blue-300"
-                  : "border-white/[0.08] bg-white/[0.03] text-gray-400 hover:bg-white/[0.06]"
-                }
-              `}
-            >
-              {setLabel(setId)}
-            </button>
-          ))}
-        </div>
+      {/* Visual set rows */}
+      <div className="space-y-3">
+        {mySets.map((setId) => {
+          const allCards = getCardKeysInSet(setId);
+          const heldCards = allCards.filter((ck) => myHand.includes(ck));
+          const missingCards = allCards.filter((ck) => !myHand.includes(ck));
+
+          if (missingCards.length === 0) return null; // Can't ask from complete sets
+
+          // Determine suit for color theming
+          const sampleCard = allCards[0];
+          const suit = sampleCard?.split(":")[1] ?? "spades";
+          const isEightsJokers = setId === "eights_jokers";
+          const colors = SUIT_COLORS[suit] ?? SUIT_COLORS.spades;
+
+          return (
+            <div key={setId} className="space-y-1.5">
+              {/* Set label */}
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-medium uppercase tracking-wider ${isEightsJokers ? "text-gray-400" : colors.text}`}>
+                  {setLabel(setId)}
+                </span>
+                <span className="text-[9px] text-gray-700">
+                  {heldCards.length}/6
+                </span>
+              </div>
+
+              {/* Cards row */}
+              <div className="flex flex-wrap gap-1">
+                {allCards.map((ck) => {
+                  const [rank, cardSuit] = ck.split(":");
+                  const isJoker = cardSuit === "joker";
+                  const iHaveIt = myHand.includes(ck);
+                  const isSelected = selectedCard === ck;
+                  const cardColors = isJoker
+                    ? { text: rank === "red" ? "text-red-400" : "text-gray-300" }
+                    : { text: SUIT_COLORS[cardSuit]?.text ?? "text-gray-300" };
+                  const symbol = SUIT_SYMBOLS[cardSuit] ?? "";
+
+                  if (iHaveIt) {
+                    // Card you hold — solid, not clickable
+                    return (
+                      <div
+                        key={ck}
+                        className={`
+                          w-10 h-14 rounded-lg border flex flex-col items-center justify-center
+                          text-xs font-semibold
+                          border-white/[0.08] bg-white/[0.05]
+                          ${cardColors.text} opacity-50
+                        `}
+                        title={`You hold: ${cardKeyLabel(ck)}`}
+                      >
+                        {isJoker ? (
+                          <span className="text-[8px] font-bold uppercase">JKR</span>
+                        ) : (
+                          <>
+                            <span className="leading-none text-[11px]">{rank}</span>
+                            <span className="leading-none text-sm">{symbol}</span>
+                          </>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // Card you're missing — clickable ghost
+                  return (
+                    <button
+                      key={ck}
+                      onClick={() => {
+                        setSelectedCard(isSelected ? null : ck);
+                        setError("");
+                      }}
+                      className={`
+                        w-10 h-14 rounded-lg border-2 border-dashed flex flex-col items-center justify-center
+                        text-xs font-semibold transition-all cursor-pointer
+                        ${isSelected
+                          ? "border-blue-400 bg-blue-500/20 ring-1 ring-blue-400/40 scale-105 border-solid"
+                          : `border-white/[0.12] bg-transparent hover:bg-white/[0.06] hover:border-white/[0.25] hover:scale-105`
+                        }
+                        ${isSelected ? "text-blue-300" : cardColors.text}
+                      `}
+                      title={`Ask for: ${cardKeyLabel(ck)}`}
+                    >
+                      {isJoker ? (
+                        <span className="text-[8px] font-bold uppercase">JKR</span>
+                      ) : (
+                        <>
+                          <span className="leading-none text-[11px]">{rank}</span>
+                          <span className="leading-none text-sm">{symbol}</span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
-
-      {/* Pick card */}
-      {selectedSet && (
-        <div>
-          <p className="text-xs text-gray-500 mb-2">Choose a card to ask for</p>
-          <div className="flex flex-wrap gap-1.5">
-            {askableCards.map((ck) => (
-              <CardDisplay
-                key={ck}
-                cardKey={ck}
-                selected={selectedCard === ck}
-                onClick={() => {
-                  setSelectedCard(ck);
-                  setError("");
-                }}
-              />
-            ))}
-            {askableCards.length === 0 && (
-              <p className="text-sm text-gray-600 italic">You already have all cards in this set!</p>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Confirm */}
       {selectedCard && (
-        <div className="flex flex-col gap-2">
-          <div className="text-sm text-gray-400">
-            Ask{" "}
-            <span className="text-gray-200 font-medium">{targetPlayer?.display_name}</span>
-            {" for the "}
-            <span className="text-gray-200 font-medium">{cardKeyLabel(selectedCard)}</span>
-          </div>
-          <Button onClick={handleAsk} loading={loading} size="md" className="w-fit">
-            Ask
+        <div className="flex items-center gap-3 pt-1">
+          <Button onClick={handleAsk} loading={loading} size="md">
+            Ask for {cardKeyLabel(selectedCard)}
           </Button>
         </div>
       )}
