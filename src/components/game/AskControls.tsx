@@ -132,13 +132,13 @@ export default function AskControls({
                 transition-all cursor-pointer
                 ${isExpanded
                   ? "border-blue-400 bg-blue-500/15 ring-1 ring-blue-400/30 scale-105"
-                  : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.08] hover:border-white/[0.15] hover:scale-105"
+                  : "border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.10] hover:border-white/[0.2] hover:scale-105"
                 }
               `}
               title={`${label} — ${heldCount}/6 cards`}
             >
               {isEights ? (
-                <span className="text-[7px] font-bold text-gray-400 text-center leading-tight uppercase">
+                <span className={`text-[8px] font-bold text-center leading-tight uppercase ${isExpanded ? "text-blue-300" : "text-gray-200"}`}>
                   8&apos;s &amp;<br />JKRs
                 </span>
               ) : (
@@ -146,12 +146,12 @@ export default function AskControls({
                   <span className={`text-xl leading-none ${isExpanded ? "text-blue-300" : color}`}>
                     {symbol}
                   </span>
-                  <span className={`text-[8px] font-semibold uppercase tracking-wide mt-1 ${isExpanded ? "text-blue-300" : "text-gray-500"}`}>
+                  <span className={`text-[9px] font-bold uppercase tracking-wide mt-1 ${isExpanded ? "text-blue-300" : "text-gray-200"}`}>
                     {label}
                   </span>
                 </>
               )}
-              <span className={`text-[7px] mt-0.5 ${isExpanded ? "text-blue-400/60" : "text-gray-700"}`}>
+              <span className={`text-[8px] font-medium mt-0.5 ${isExpanded ? "text-blue-400" : "text-gray-500"}`}>
                 {heldCount}/6
               </span>
             </button>
