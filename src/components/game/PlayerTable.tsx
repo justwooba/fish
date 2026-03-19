@@ -45,14 +45,12 @@ export default function PlayerTable({
   const teamBSets = declaredSets.filter((ds) => ds.awarded_to === "B");
   const nullSets = declaredSets.filter((ds) => ds.awarded_to === null);
 
-  // Refs for each seat position
   const seatRefs = useRef<(HTMLDivElement | null)[]>([null, null, null, null, null, null]);
   const rotatedRef = useRef(rotated);
   rotatedRef.current = rotated;
   const onSeatPositionsRef = useRef(onSeatPositions);
   onSeatPositionsRef.current = onSeatPositions;
 
-  // Update positions after render and on resize
   useEffect(() => {
     function updatePositions() {
       if (!onSeatPositionsRef.current) return;
@@ -70,7 +68,6 @@ export default function PlayerTable({
       onSeatPositionsRef.current(positions);
     }
 
-    // Small delay to let layout settle
     const t = setTimeout(updatePositions, 100);
     window.addEventListener("resize", updatePositions);
     return () => {
@@ -97,6 +94,8 @@ export default function PlayerTable({
     );
   }
 
+  const totalDeclared = teamASets.length + teamBSets.length + nullSets.length;
+
   return (
     <div className="relative w-full">
       {selectableOpponents && !selectedOpponent && (
@@ -117,58 +116,84 @@ export default function PlayerTable({
         <div className="col-start-1 row-start-2 row-span-2 z-10">{renderSeat(rotated[1], 1)}</div>
         <div className="col-start-4 row-start-2 row-span-2 z-10">{renderSeat(rotated[4], 4)}</div>
 
+        {/* ── Table surface ───────────────────────────────────────── */}
         <div
           className="
             col-start-2 col-span-2 row-start-2 row-span-2
             w-full h-full min-h-[120px]
             rounded-[40%/50%]
             bg-emerald-900/15 border border-emerald-800/25
-            flex items-center justify-between
-            px-5 py-3
+            flex flex-col items-center justify-center
+            px-4 py-3 gap-2
           "
         >
-          <div className="flex flex-col gap-1 items-start min-w-0">
-            {teamASets.length > 0 && (
-              <>
-                <span className="text-[8px] text-sky-500/50 uppercase tracking-wider font-medium">A</span>
-                {teamASets.map((ds, i) => (
-                  <span key={i} className="text-[9px] text-sky-400/70 leading-tight truncate">
-                    {setLabel(ds.set_id)}
-                  </span>
-                ))}
-              </>
-            )}
-          </div>
-          <span className="text-[10px] text-emerald-700/40 uppercase tracking-widest font-medium shrink-0 mx-2">
-            Fish
-          </span>
-          <div className="flex flex-col gap-1 items-end min-w-0">
-            {teamBSets.length > 0 && (
-              <>
-                <span className="text-[8px] text-rose-500/50 uppercase tracking-wider font-medium">B</span>
-                {teamBSets.map((ds, i) => (
-                  <span key={i} className="text-[9px] text-rose-400/70 leading-tight truncate">
-                    {setLabel(ds.set_id)}
-                  </span>
-                ))}
-              </>
-            )}
-          </div>
+          {/* Score chips on the table */}
+          {totalDeclared > 0 ? (
+            <div className="flex gap-3 items-start">
+              {/* Team A stack */}
+              {teamASets.length > 0 && (
+                <div className="flex flex-col items-center gap-0.5">
+                  <div className="flex items-center gap-1">
+                    <div className="w-5 h-5 rounded-full bg-sky-500/20 border border-sky-500/30 flex items-center justify-center">
+                      <span className="text-[9px] font-bold text-sky-400">{teamASets.length}</span>
+                    </div>
+                    <span className="text-[8px] text-sky-400/60 uppercase font-medium">A</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    {teamASets.map((ds, i) => (
+                      <span key={i} className="text-[8px] text-sky-400/50 leading-none">
+                        {setLabel(ds.set_id)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Center divider */}
+              {teamASets.length > 0 && teamBSets.length > 0 && (
+                <div className="w-px h-8 bg-white/[0.06] self-center" />
+              )}
+
+              {/* Team B stack */}
+              {teamBSets.length > 0 && (
+                <div className="flex flex-col items-center gap-0.5">
+                  <div className="flex items-center gap-1">
+                    <div className="w-5 h-5 rounded-full bg-rose-500/20 border border-rose-500/30 flex items-center justify-center">
+                      <span className="text-[9px] font-bold text-rose-400">{teamBSets.length}</span>
+                    </div>
+                    <span className="text-[8px] text-rose-400/60 uppercase font-medium">B</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    {teamBSets.map((ds, i) => (
+                      <span key={i} className="text-[8px] text-rose-400/50 leading-none">
+                        {setLabel(ds.set_id)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="text-[10px] text-emerald-700/40 uppercase tracking-widest font-medium">
+              Fish
+            </span>
+          )}
+
+          {/* Nullified sets */}
+          {nullSets.length > 0 && (
+            <div className="flex gap-1.5">
+              {nullSets.map((ds, i) => (
+                <span key={i} className="text-[7px] text-gray-600 line-through">
+                  {setLabel(ds.set_id)}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="col-start-2 row-start-4 z-10">{renderSeat(rotated[0], 0)}</div>
         <div className="col-start-3 row-start-4 z-10">{renderSeat(rotated[5], 5)}</div>
       </div>
-
-      {nullSets.length > 0 && (
-        <div className="flex justify-center gap-1 mt-2">
-          {nullSets.map((ds, i) => (
-            <span key={i} className="text-[9px] text-gray-600 line-through">
-              {setLabel(ds.set_id)}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -111,7 +111,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
   // cards to ask from the default set. If not, clear it but keep opponent.
   useEffect(() => {
     if (defaultSet && game) {
-      const askable = getCardKeysInSet(defaultSet).filter((ck) => !game.my_hand.includes(ck));
+      const askable = getCardKeysInSet(defaultSet).filter((ck) => !(game.my_hand ?? []).includes(ck));
       if (askable.length === 0) {
         // We have all cards in this set now — clear default set
         setDefaultSet(null);
@@ -175,8 +175,10 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
   const isMyTeamsTurn = players.find((p) => p.id === game.current_turn)?.team === myTeam;
   const isFinished = game.phase === "finished";
 
+  // For choose_turn phase: find the last set that was actually awarded (not nullified)
   const lastDeclared = game.declared_sets[game.declared_sets.length - 1];
-  const choosingTeam = lastDeclared?.awarded_to ?? "A";
+  const choosingTeam: TeamId = lastDeclared?.awarded_to ?? 
+    (players.find((p) => p.id === game.current_turn)?.team as TeamId) ?? "A";
 
   const declaredSetIds = game.declared_sets.map((ds) => ds.set_id);
 
@@ -278,7 +280,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                 {/* Ask controls — when opponent is selected */}
                 {game.phase === "asking" && isMyTurn && selectedOpponent && (
                   <AskControls
-                    myHand={game.my_hand}
+                    myHand={game.my_hand ?? []}
                     myPlayerId={myPlayerId}
                     players={players}
                     selectedTarget={selectedOpponent}
@@ -294,7 +296,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                 {/* Declare controls */}
                 {(!selectedOpponent || game.phase === "declaring") && (
                   <DeclareControls
-                    myHand={game.my_hand}
+                    myHand={game.my_hand ?? []}
                     myPlayerId={myPlayerId}
                     myTeam={myTeam}
                     players={players}
@@ -334,7 +336,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
 
         {/* My hand */}
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-          <MyHand hand={game.my_hand} />
+          <MyHand hand={game.my_hand ?? []} />
         </div>
 
         {/* Postgame log */}

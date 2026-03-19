@@ -103,7 +103,7 @@ export type RoomStatus = "waiting" | "playing" | "finished";
 
 export type Room = {
   id: string;
-  code: string;          // 4-char join code, e.g. "A3KX"
+  code: string;          // 6-char join code, e.g. "A3KXEX"
   host_id: string;       // user_id of the room creator
   status: RoomStatus;
   settings: RoomSettings;
