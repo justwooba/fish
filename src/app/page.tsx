@@ -81,7 +81,7 @@ export default function Home() {
 
         {/* ── Footer ────────────────────────────────────────────────── */}
         <p className="text-xs text-gray-700 animate-fade-in delay-5">
-          No account needed &middot; Play instantly
+          Built by Wooba Song '26
         </p>
       </div>
     </main>
