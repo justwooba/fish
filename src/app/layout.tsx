@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Fish — The Card Game",
+  title: "Fish",
   description: "Play Fish, the six-player team card game, in real time with friends.",
 };
 
