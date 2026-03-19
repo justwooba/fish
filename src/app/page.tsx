@@ -1,5 +1,4 @@
-import CreateRoomButton from "@/components/home/CreateRoomButton";
-import JoinRoomForm from "@/components/home/JoinRoomForm";
+import { CreateRoomButton, JoinRoomForm } from "@/components/home";
 import { SuitSpade, SuitHeart, SuitDiamond, SuitClub } from "@/components/icons/Suits";
 
 export default function Home() {
@@ -72,17 +71,18 @@ export default function Home() {
               </p>
               <p>
                 When your team has a complete set, declare it for a point.
-                First team to five sets wins. Memory, deduction, and teamwork
-                are everything.
+                First team to five sets wins.
               </p>
             </div>
           </div>
         </div>
 
         {/* ── Footer ────────────────────────────────────────────────── */}
-        <p className="text-xs text-gray-700 animate-fade-in delay-5">
-          No account needed &middot; Play instantly
-        </p>
+        <div className="text-center animate-fade-in delay-5 space-y-1">
+          <p className="text-xs text-gray-700">
+            Built by Wooba Song '26
+          </p>
+        </div>
       </div>
     </main>
   );
