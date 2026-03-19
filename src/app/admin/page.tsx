@@ -15,6 +15,7 @@ interface GameState {
   action_log: Array<Record<string, unknown>>;
   winner: string | null; version: number;
   declaring_player_id: string | null; declaring_set: string | null;
+  started_at: string; turn_started_at: string; ended_at: string | null;
 }
 
 export default function AdminPage() {
@@ -86,14 +87,21 @@ export default function AdminPage() {
     return players.find((p) => p.id === pid)?.display_name ?? pid?.slice(0, 8) ?? "?";
   };
 
-  function renderLogEntry(action: Record<string, unknown>, i: number) {
+  function renderLogEntry(action: Record<string, unknown>, i: number, startedAt?: string) {
     const turnNum = i + 1;
     const numSpan = <span className="text-gray-700 w-5 text-right shrink-0 font-mono">{turnNum}</span>;
+    
+    let timeStr = "";
+    if (startedAt && action.timestamp) {
+      const relSec = Math.max(0, Math.floor((new Date(action.timestamp as string).getTime() - new Date(startedAt).getTime()) / 1000));
+      timeStr = `${Math.floor(relSec / 60)}:${(relSec % 60).toString().padStart(2, "0")}`;
+    }
+    const timeSpan = <span className="text-gray-700 w-8 text-right shrink-0 font-mono">{timeStr}</span>;
 
     if (action.type === "admin") {
       return (
         <div key={i} className="flex gap-2 py-0.5 text-[10px]">
-          {numSpan}
+          {numSpan}{timeSpan}
           <span className="text-amber-400/70 italic">Admin: {action.description as string}</span>
         </div>
       );
@@ -101,7 +109,7 @@ export default function AdminPage() {
     if (action.type === "ask") {
       return (
         <div key={i} className="flex gap-2 py-0.5 text-[10px]">
-          {numSpan}
+          {numSpan}{timeSpan}
           <div>
             <span className="text-gray-400">{getPlayerName(action.asker_id as string)}</span>
             <span className="text-gray-600"> → </span>
@@ -117,7 +125,7 @@ export default function AdminPage() {
     if (action.type === "declare") {
       return (
         <div key={i} className="flex gap-2 py-0.5 text-[10px]">
-          {numSpan}
+          {numSpan}{timeSpan}
           <div className={`rounded px-1 ${action.success ? "bg-emerald-500/[0.05]" : action.awarded_to === null ? "bg-gray-500/[0.05]" : "bg-red-500/[0.05]"}`}>
             <span className="text-gray-400">{getPlayerName(action.declarer_id as string)}</span>
             <span className="text-gray-600"> declared </span>
@@ -134,7 +142,7 @@ export default function AdminPage() {
     if (action.type === "choose_turn") {
       return (
         <div key={i} className="flex gap-2 py-0.5 text-[10px]">
-          {numSpan}
+          {numSpan}{timeSpan}
           <span className="text-gray-600 italic">Team {action.team as string} → {getPlayerName(action.chosen_player_id as string)}</span>
         </div>
       );
@@ -230,6 +238,14 @@ export default function AdminPage() {
                         <span>Score: <span className="text-sky-400">{gs.score_a}</span>-<span className="text-rose-400">{gs.score_b}</span></span>
                         <span>v{gs.version}</span>
                         {gs.winner && <span>Winner: <span className="text-amber-400">Team {gs.winner}</span></span>}
+                        {gs.started_at && (
+                          <span>Elapsed: <span className="text-gray-300 font-mono">{(() => {
+                            const start = new Date(gs.started_at).getTime();
+                            const end = gs.ended_at ? new Date(gs.ended_at).getTime() : Date.now();
+                            const sec = Math.floor((end - start) / 1000);
+                            return `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, "0")}`;
+                          })()}</span></span>
+                        )}
                       </div>
 
                       {/* Declared sets with reassign */}
@@ -370,7 +386,7 @@ export default function AdminPage() {
                       {expandedLog === gs.id && (
                         <div className="space-y-0.5 p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] max-h-80 overflow-y-auto">
                           {gs.action_log.length === 0 && <p className="text-[9px] text-gray-700 italic">No actions yet</p>}
-                          {gs.action_log.map((action, i) => renderLogEntry(action, i))}
+                          {gs.action_log.map((action, i) => renderLogEntry(action, i, gs.started_at))}
                         </div>
                       )}
                     </div>

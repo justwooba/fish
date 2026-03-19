@@ -91,10 +91,10 @@ export type RoomSettings = {
 };
 
 export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
-  team_declare: true,
-  nullify_misdeclare: true,
+  team_declare: false,
+  nullify_misdeclare: false,
   no_turn_on_misdeclare: false,
-  play_all_sets: true,
+  play_all_sets: false,
 };
 
 // ─── Room ────────────────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ export type RoomStatus = "waiting" | "playing" | "finished";
 
 export type Room = {
   id: string;
-  code: string;          // 6-char join code, e.g. "A3KXEX"
+  code: string;          // 4-char join code, e.g. "A3KX"
   host_id: string;       // user_id of the room creator
   status: RoomStatus;
   settings: RoomSettings;
@@ -191,6 +191,9 @@ export type ServerGameState = {
   action_log: GameAction[];              // full history — hidden during play
   winner: TeamId | null;
   version: number;                       // optimistic locking counter
+  started_at: string;                    // ISO timestamp — when the game started
+  turn_started_at: string;               // ISO timestamp — when the current turn started
+  ended_at: string | null;               // ISO timestamp — when the game ended
 };
 
 // ─── Game State — Client (what gets sent to each player) ─────────────────────
@@ -209,6 +212,9 @@ export type ClientGameState = {
   score_b: number;
   action_log: GameAction[] | null;       // null during play, populated postgame
   winner: TeamId | null;
+  started_at: string;
+  turn_started_at: string;
+  ended_at: string | null;
 };
 
 // ─── Helper: strip server state down to client state for a specific player ───
@@ -236,5 +242,8 @@ export function toClientGameState(
     score_b: server.score_b,
     action_log: includeLog ? server.action_log : null,
     winner: server.winner,
+    started_at: server.started_at,
+    turn_started_at: server.turn_started_at,
+    ended_at: server.ended_at,
   };
 }

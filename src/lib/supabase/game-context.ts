@@ -86,6 +86,9 @@ export async function loadGameContext(
     action_log: gs.action_log,
     winner: gs.winner,
     version: gs.version ?? 0,
+    started_at: gs.started_at ?? new Date().toISOString(),
+    turn_started_at: gs.turn_started_at ?? new Date().toISOString(),
+    ended_at: gs.ended_at ?? null,
   };
 
   return {
@@ -171,6 +174,12 @@ export async function saveGameState(
 
   const finalState = skipEmptyPlayers(newState, ctx.players);
 
+  // Update turn timer if turn changed
+  const turnChanged = finalState.current_turn !== ctx.gameState.current_turn;
+  const now = new Date().toISOString();
+  const turnStartedAt = turnChanged ? now : ctx.gameState.turn_started_at;
+  const endedAt = finalState.phase === "finished" ? now : null;
+
   // Optimistic lock: update only if version hasn't changed
   const { data, error: updateError } = await supabase
     .from("game_states")
@@ -185,6 +194,8 @@ export async function saveGameState(
       action_log: finalState.action_log,
       winner: finalState.winner,
       version: ctx.gameState.version + 1,
+      turn_started_at: turnStartedAt,
+      ended_at: endedAt,
     })
     .eq("id", finalState.id)
     .eq("version", ctx.gameState.version)

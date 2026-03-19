@@ -214,6 +214,7 @@ export function createInitialGameState(
 
   const hands = dealCards(playerIds);
 
+  const now = new Date().toISOString();
   return {
     id: gameId,
     room_id: roomId,
@@ -227,6 +228,9 @@ export function createInitialGameState(
     action_log: [],
     winner: null,
     version: 0,
+    started_at: now,
+    turn_started_at: now,
+    ended_at: null,
   };
 }
 

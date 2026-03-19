@@ -14,6 +14,7 @@ import AskControls from "@/components/game/AskControls";
 import DeclareControls from "@/components/game/DeclareControls";
 import ChooseTurnControls from "@/components/game/ChooseTurnControls";
 import CardFlyAnimation from "@/components/game/CardFlyAnimation";
+import GameTimer from "@/components/game/GameTimer";
 import Button from "@/components/ui/Button";
 
 interface GamePageClientProps {
@@ -196,6 +197,17 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
 
         <Scoreboard scoreA={game.score_a ?? 0} scoreB={game.score_b ?? 0} winner={game.winner} />
 
+        {/* Timer */}
+        {game.started_at && (
+          <GameTimer
+            startedAt={game.started_at}
+            turnStartedAt={game.turn_started_at ?? game.started_at}
+            endedAt={game.ended_at ?? null}
+            isFinished={isFinished}
+            currentTurnName={currentTurnPlayer?.display_name ?? "?"}
+          />
+        )}
+
         {phaseText && (
           <div className="text-center">
             <p className={`text-sm font-medium ${isMyTurn && !isFinished ? "text-amber-400" : "text-gray-400"}`}>{phaseText}</p>
@@ -286,11 +298,28 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
         {/* Postgame log */}
         {isFinished && Array.isArray(game.action_log) && game.action_log.length > 0 && (
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-            <h3 className="text-lg text-gray-200 mb-3" style={{ fontFamily: "var(--font-display)" }}>Game Log</h3>
+            <h3 className="text-lg text-gray-200 mb-3" style={{ fontFamily: "var(--font-display)" }}>
+              Game Log
+              {game.started_at && game.ended_at && (
+                <span className="text-xs text-gray-600 font-normal ml-2">
+                  {(() => {
+                    const elapsed = Math.floor((new Date(game.ended_at).getTime() - new Date(game.started_at).getTime()) / 1000);
+                    const m = Math.floor(elapsed / 60);
+                    const s = elapsed % 60;
+                    return `Total: ${m}:${s.toString().padStart(2, "0")}`;
+                  })()}
+                </span>
+              )}
+            </h3>
             <div className="space-y-0.5 max-h-80 overflow-y-auto">
               {game.action_log.map((action, i) => {
                 if (!action || !action.type) return null;
                 const turnNum = i + 1;
+                const gameStart = game.started_at ? new Date(game.started_at).getTime() : 0;
+                const actionTime = action.timestamp ? new Date(action.timestamp).getTime() : 0;
+                const relSec = gameStart && actionTime ? Math.max(0, Math.floor((actionTime - gameStart) / 1000)) : null;
+                const timeStr = relSec !== null ? `${Math.floor(relSec / 60)}:${(relSec % 60).toString().padStart(2, "0")}` : "";
+
                 if (action.type === "ask") {
                   const asker = players?.find((p) => p.id === action.asker_id)?.display_name ?? "?";
                   const target = players?.find((p) => p.id === action.target_id)?.display_name ?? "?";
@@ -298,6 +327,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                   return (
                     <div key={i} className="flex gap-2 py-1 text-xs">
                       <span className="text-gray-700 w-6 text-right shrink-0 font-mono">{turnNum}</span>
+                      <span className="text-gray-700 w-10 text-right shrink-0 font-mono">{timeStr}</span>
                       <div>
                         <span className="text-gray-300">{asker}</span>
                         <span className="text-gray-600">{" → "}</span>
@@ -316,6 +346,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                   return (
                     <div key={i} className="flex gap-2 py-1.5 text-xs">
                       <span className="text-gray-700 w-6 text-right shrink-0 font-mono">{turnNum}</span>
+                      <span className="text-gray-700 w-10 text-right shrink-0 font-mono">{timeStr}</span>
                       <div className={`rounded-md px-2 py-1 -mx-1 ${action.success ? "bg-emerald-500/[0.06] border border-emerald-500/10" : action.awarded_to === null ? "bg-gray-500/[0.06] border border-gray-500/10" : "bg-red-500/[0.06] border border-red-500/10"}`}>
                         <span className="text-gray-300">{declarer}</span>
                         <span className="text-gray-600">{" declared "}</span>
@@ -337,6 +368,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                   return (
                     <div key={i} className="flex gap-2 py-1 text-xs">
                       <span className="text-gray-700 w-6 text-right shrink-0 font-mono">{turnNum}</span>
+                      <span className="text-gray-700 w-10 text-right shrink-0 font-mono">{timeStr}</span>
                       <div className="text-gray-600 italic">Team {action.team} chose <span className="text-gray-400 not-italic">{chosen}</span> to go next</div>
                     </div>
                   );
@@ -345,6 +377,7 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                   return (
                     <div key={i} className="flex gap-2 py-1 text-xs">
                       <span className="text-gray-700 w-6 text-right shrink-0 font-mono">{turnNum}</span>
+                      <span className="text-gray-700 w-10 text-right shrink-0 font-mono">{timeStr}</span>
                       <div className="text-amber-400/60 italic">Admin: {String(action.description ?? "action")}</div>
                     </div>
                   );

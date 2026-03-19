@@ -104,6 +104,7 @@ export async function POST(
   }
 
   // Insert the game state
+  const now = new Date().toISOString();
   const { error: gsError } = await supabase.from("game_states").insert({
     id: gameState.id,
     room_id: room.id,
@@ -117,6 +118,8 @@ export async function POST(
     action_log: gameState.action_log,
     winner: gameState.winner,
     version: 0,
+    started_at: now,
+    turn_started_at: now,
   });
 
   if (gsError) {
