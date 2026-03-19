@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { TeamId, RoomSettings } from "@/lib/types";
 import { useRoom } from "@/hooks/useRoom";
@@ -9,6 +9,7 @@ import TeamColumn from "@/components/lobby/TeamColumn";
 import UnassignedPlayers from "@/components/lobby/UnassignedPlayers";
 import RoomSettingsPanel from "@/components/lobby/RoomSettingsPanel";
 import StartGameButton from "@/components/lobby/StartGameButton";
+import JoinViaLink from "@/components/lobby/JoinViaLink";
 
 interface LobbyPageClientProps {
   roomCode: string;
@@ -24,6 +25,13 @@ export default function LobbyPageClient({ roomCode }: LobbyPageClientProps) {
   const isHost = room?.host_id === currentUserId;
   const currentUser = players.find((p) => p.user_id === currentUserId);
   const currentUserTeam = currentUser?.team ?? null;
+
+  // ── Redirect when game starts ──────────────────────────────────────────
+  useEffect(() => {
+    if (room?.status === "playing") {
+      router.push(`/game/${room.id}`);
+    }
+  }, [room?.status, room?.id, router]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -88,8 +96,6 @@ export default function LobbyPageClient({ roomCode }: LobbyPageClientProps) {
         setActionError(data.error || "Failed to start game");
         setStartLoading(false);
       }
-      // On success, the room status changes to "playing" via realtime
-      // and we'll redirect to the game page (handled below)
     } catch {
       setActionError("Network error");
       setStartLoading(false);
@@ -133,10 +139,9 @@ export default function LobbyPageClient({ roomCode }: LobbyPageClientProps) {
     }
   }, [roomCode]);
 
-  // ── Redirect when game starts ───────────────────────────────────────────
+  // ── Show loading while redirecting to game ─────────────────────────────
 
   if (room?.status === "playing") {
-    router.push(`/game/${room.id}`);
     return (
       <main className="min-h-dvh flex items-center justify-center">
         <div className="text-gray-500 text-sm animate-pulse">Starting game...</div>
@@ -177,28 +182,7 @@ export default function LobbyPageClient({ roomCode }: LobbyPageClientProps) {
   }
 
   if (!currentUser) {
-    // User isn't in this room yet — they need to join via the home page
-    return (
-      <main className="min-h-dvh flex items-center justify-center px-4">
-        <div className="text-center">
-          <h1
-            className="text-2xl text-gray-200 mb-2"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            Not in this room
-          </h1>
-          <p className="text-gray-500 text-sm mb-6">
-            Join this room using code <span className="font-mono text-gray-300">{roomCode}</span>
-          </p>
-          <a
-            href="/"
-            className="text-sm text-blue-500 hover:text-blue-400 transition-colors"
-          >
-            ← Go to home
-          </a>
-        </div>
-      </main>
-    );
+    return <JoinViaLink roomCode={roomCode} />;
   }
 
   // ── Render ──────────────────────────────────────────────────────────────
@@ -281,9 +265,9 @@ export default function LobbyPageClient({ roomCode }: LobbyPageClientProps) {
         <button
           onClick={handleLeave}
           disabled={leaveLoading}
-          className="text-xs text-gray-700 hover:text-red-400 transition-colors mt-4 cursor-pointer disabled:opacity-40"
+          className="text-sm px-5 py-2 rounded-xl border border-white/[0.06] text-gray-500 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/[0.04] transition-all mt-4 cursor-pointer disabled:opacity-40"
         >
-          {leaveLoading ? "Leaving..." : "← Leave room"}
+          {leaveLoading ? "Leaving..." : "Leave Room"}
         </button>
       </div>
     </main>
