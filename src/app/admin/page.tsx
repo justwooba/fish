@@ -28,17 +28,15 @@ export default function AdminPage() {
   const [expandedRoom, setExpandedRoom] = useState<string | null>(null);
   const [expandedHands, setExpandedHands] = useState<string | null>(null);
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
-
-  // Admin action modals
   const [moveCard, setMoveCard] = useState<{ gsId: string; card: string; fromId: string } | null>(null);
   const [awardSet, setAwardSet] = useState<{ gsId: string } | null>(null);
   const [changeTurn, setChangeTurn] = useState<{ gsId: string } | null>(null);
+  const [reassignSet, setReassignSet] = useState<{ gsId: string; setId: string } | null>(null);
 
-  const headers = useCallback(() => ({ "x-admin-password": password }), [password]);
+  const hdrs = useCallback(() => ({ "x-admin-password": password }), [password]);
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const res = await fetch("/api/admin", { headers: { "x-admin-password": password } });
       if (!res.ok) { if (res.status === 401) { setAuthed(false); setError("Wrong password"); } return; }
@@ -51,12 +49,12 @@ export default function AdminPage() {
 
   async function handleDelete(type: string, id: string, label: string) {
     if (!confirm(`Delete ${type} "${label}"?`)) return;
-    await fetch("/api/admin", { method: "DELETE", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ type, id }) });
+    await fetch("/api/admin", { method: "DELETE", headers: { ...hdrs(), "Content-Type": "application/json" }, body: JSON.stringify({ type, id }) });
     fetchData();
   }
 
   async function adminPatch(body: Record<string, unknown>) {
-    const res = await fetch("/api/admin", { method: "PATCH", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const res = await fetch("/api/admin", { method: "PATCH", headers: { ...hdrs(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!res.ok) { const d = await res.json(); alert(`Error: ${d.error}`); }
     fetchData();
   }
@@ -83,7 +81,66 @@ export default function AdminPage() {
 
   const getRoomPlayers = (roomId: string) => players.filter((p) => p.room_id === roomId);
   const getGameState = (roomId: string) => gameStates.find((gs) => gs.room_id === roomId);
-  const getPlayerName = (pid: string) => players.find((p) => p.id === pid)?.display_name ?? pid?.slice(0, 8) ?? "?";
+  const getPlayerName = (pid: string) => {
+    if (pid === "admin") return "Admin";
+    return players.find((p) => p.id === pid)?.display_name ?? pid?.slice(0, 8) ?? "?";
+  };
+
+  function renderLogEntry(action: Record<string, unknown>, i: number) {
+    const turnNum = i + 1;
+    const numSpan = <span className="text-gray-700 w-5 text-right shrink-0 font-mono">{turnNum}</span>;
+
+    if (action.type === "admin") {
+      return (
+        <div key={i} className="flex gap-2 py-0.5 text-[10px]">
+          {numSpan}
+          <span className="text-amber-400/70 italic">Admin: {action.description as string}</span>
+        </div>
+      );
+    }
+    if (action.type === "ask") {
+      return (
+        <div key={i} className="flex gap-2 py-0.5 text-[10px]">
+          {numSpan}
+          <div>
+            <span className="text-gray-400">{getPlayerName(action.asker_id as string)}</span>
+            <span className="text-gray-600"> → </span>
+            <span className="text-gray-400">{getPlayerName(action.target_id as string)}</span>
+            <span className="text-gray-600"> for </span>
+            <span className="text-gray-300">{cardKeyLabel(action.card as string)}</span>
+            <span className="text-gray-600"> — </span>
+            <span className={action.success ? "text-emerald-400" : "text-gray-600"}>{action.success ? "✓" : "✗"}</span>
+          </div>
+        </div>
+      );
+    }
+    if (action.type === "declare") {
+      return (
+        <div key={i} className="flex gap-2 py-0.5 text-[10px]">
+          {numSpan}
+          <div className={`rounded px-1 ${action.success ? "bg-emerald-500/[0.05]" : action.awarded_to === null ? "bg-gray-500/[0.05]" : "bg-red-500/[0.05]"}`}>
+            <span className="text-gray-400">{getPlayerName(action.declarer_id as string)}</span>
+            <span className="text-gray-600"> declared </span>
+            <span className="text-gray-300">{setLabel((action.set_id as string) as FishSetId)}</span>
+            <span className="text-gray-600"> — </span>
+            {action.success
+              ? <span className="text-emerald-400">✓ Team {action.awarded_to as string}</span>
+              : action.awarded_to === null ? <span className="text-gray-500">nullified</span>
+              : <span className="text-red-400">✗ Team {action.awarded_to as string}</span>}
+          </div>
+        </div>
+      );
+    }
+    if (action.type === "choose_turn") {
+      return (
+        <div key={i} className="flex gap-2 py-0.5 text-[10px]">
+          {numSpan}
+          <span className="text-gray-600 italic">Team {action.team as string} → {getPlayerName(action.chosen_player_id as string)}</span>
+        </div>
+      );
+    }
+    return null;
+  }
 
   return (
     <main className="min-h-dvh px-4 py-8">
@@ -104,10 +161,9 @@ export default function AdminPage() {
 
           return (
             <div key={room.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-              {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-white/[0.03] transition-all"
                 onClick={() => setExpandedRoom(isExp ? null : room.id)}>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <span className="font-mono text-sm text-gray-200 font-bold">{room.code}</span>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${
                     room.status === "playing" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
@@ -176,16 +232,36 @@ export default function AdminPage() {
                         {gs.winner && <span>Winner: <span className="text-amber-400">Team {gs.winner}</span></span>}
                       </div>
 
-                      {/* Declared sets */}
+                      {/* Declared sets with reassign */}
                       {gs.declared_sets.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-gray-600">Declared Sets (click to reassign):</p>
                           {gs.declared_sets.map((ds, i) => (
-                            <span key={i} className={`text-[9px] px-1.5 py-0.5 rounded ${
-                              ds.awarded_to === "A" ? "bg-sky-500/10 text-sky-400" :
-                              ds.awarded_to === "B" ? "bg-rose-500/10 text-rose-400" :
-                              "bg-gray-500/10 text-gray-500 line-through"}`}>
-                              {setLabel(ds.set_id as FishSetId)} {ds.was_correct ? "✓" : "✗"}
-                            </span>
+                            <div key={i} className="flex items-center gap-2">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-all ${
+                                ds.awarded_to === "A" ? "bg-sky-500/10 text-sky-400 hover:bg-sky-500/20" :
+                                ds.awarded_to === "B" ? "bg-rose-500/10 text-rose-400 hover:bg-rose-500/20" :
+                                "bg-gray-500/10 text-gray-500 line-through hover:bg-gray-500/20"}`}
+                                onClick={() => setReassignSet(reassignSet?.setId === ds.set_id ? null : { gsId: gs.id, setId: ds.set_id })}>
+                                {setLabel(ds.set_id as FishSetId)} {ds.was_correct ? "✓" : "✗"} → {ds.awarded_to ?? "null"}
+                              </span>
+
+                              {reassignSet?.gsId === gs.id && reassignSet?.setId === ds.set_id && (
+                                <div className="flex gap-1">
+                                  <span className="text-[9px] text-gray-600">Reassign to:</span>
+                                  {["A", "B", "null"].map((t) => (
+                                    <button key={t}
+                                      onClick={() => { adminPatch({ action: "reassign_set", game_state_id: gs.id, set_id: ds.set_id, new_team: t }); setReassignSet(null); }}
+                                      className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer transition-all ${
+                                        t === "A" ? "bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500/20" :
+                                        t === "B" ? "bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20" :
+                                        "bg-gray-500/10 text-gray-500 border border-gray-500/20 hover:bg-gray-500/20"}`}>
+                                      {t === "null" ? "Null" : `Team ${t}`}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           ))}
                         </div>
                       )}
@@ -193,16 +269,11 @@ export default function AdminPage() {
                       {/* Admin actions */}
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => setChangeTurn(changeTurn?.gsId === gs.id ? null : { gsId: gs.id })}
-                          className="text-[10px] px-2 py-1 rounded border border-white/[0.08] text-gray-400 hover:text-gray-200 hover:bg-white/[0.06] cursor-pointer transition-all">
-                          Change Turn
-                        </button>
+                          className="text-[10px] px-2 py-1 rounded border border-white/[0.08] text-gray-400 hover:text-gray-200 hover:bg-white/[0.06] cursor-pointer transition-all">Change Turn</button>
                         <button onClick={() => setAwardSet(awardSet?.gsId === gs.id ? null : { gsId: gs.id })}
-                          className="text-[10px] px-2 py-1 rounded border border-white/[0.08] text-gray-400 hover:text-gray-200 hover:bg-white/[0.06] cursor-pointer transition-all">
-                          Award Set
-                        </button>
+                          className="text-[10px] px-2 py-1 rounded border border-white/[0.08] text-gray-400 hover:text-gray-200 hover:bg-white/[0.06] cursor-pointer transition-all">Award Set</button>
                       </div>
 
-                      {/* Change turn panel */}
                       {changeTurn?.gsId === gs.id && (
                         <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] space-y-1">
                           <p className="text-[10px] text-gray-500">Set turn to:</p>
@@ -211,10 +282,7 @@ export default function AdminPage() {
                               <button key={p.id}
                                 onClick={() => { adminPatch({ action: "change_turn", game_state_id: gs.id, player_id: p.id }); setChangeTurn(null); }}
                                 className={`text-[10px] px-2 py-1 rounded border cursor-pointer transition-all ${
-                                  gs.current_turn === p.id
-                                    ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
-                                    : "border-white/[0.06] text-gray-400 hover:bg-white/[0.06]"
-                                }`}>
+                                  gs.current_turn === p.id ? "border-amber-500/30 bg-amber-500/10 text-amber-400" : "border-white/[0.06] text-gray-400 hover:bg-white/[0.06]"}`}>
                                 {p.display_name}
                               </button>
                             ))}
@@ -222,19 +290,22 @@ export default function AdminPage() {
                         </div>
                       )}
 
-                      {/* Award set panel */}
                       {awardSet?.gsId === gs.id && (
                         <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] space-y-2">
-                          <p className="text-[10px] text-gray-500">Award set to team:</p>
+                          <p className="text-[10px] text-gray-500">Award undeclared set:</p>
                           {FISH_SET_IDS.filter((sid) => !gs.declared_sets.some((ds) => ds.set_id === sid)).map((sid) => (
                             <div key={sid} className="flex items-center gap-2">
                               <span className="text-[10px] text-gray-400 w-24">{setLabel(sid)}</span>
-                              <button onClick={() => { adminPatch({ action: "award_set", game_state_id: gs.id, set_id: sid, team: "A" }); setAwardSet(null); }}
-                                className="text-[9px] px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 cursor-pointer transition-all">A</button>
-                              <button onClick={() => { adminPatch({ action: "award_set", game_state_id: gs.id, set_id: sid, team: "B" }); setAwardSet(null); }}
-                                className="text-[9px] px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 cursor-pointer transition-all">B</button>
-                              <button onClick={() => { adminPatch({ action: "award_set", game_state_id: gs.id, set_id: sid, team: "null" }); setAwardSet(null); }}
-                                className="text-[9px] px-2 py-0.5 rounded bg-gray-500/10 text-gray-500 border border-gray-500/20 hover:bg-gray-500/20 cursor-pointer transition-all">Null</button>
+                              {["A", "B", "null"].map((t) => (
+                                <button key={t}
+                                  onClick={() => { adminPatch({ action: "award_set", game_state_id: gs.id, set_id: sid, team: t }); setAwardSet(null); }}
+                                  className={`text-[9px] px-2 py-0.5 rounded cursor-pointer transition-all ${
+                                    t === "A" ? "bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500/20" :
+                                    t === "B" ? "bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20" :
+                                    "bg-gray-500/10 text-gray-500 border border-gray-500/20 hover:bg-gray-500/20"}`}>
+                                  {t === "null" ? "Null" : t}
+                                </button>
+                              ))}
                             </div>
                           ))}
                         </div>
@@ -258,17 +329,14 @@ export default function AdminPage() {
                                     className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer transition-all ${
                                       moveCard?.card === card && moveCard?.fromId === pid
                                         ? "bg-blue-500/20 text-blue-300 border border-blue-400/30"
-                                        : "bg-white/[0.04] text-gray-300 hover:bg-white/[0.08]"
-                                    }`}>
+                                        : "bg-white/[0.04] text-gray-300 hover:bg-white/[0.08]"}`}>
                                     {cardKeyLabel(card)}
                                   </button>
                                 ))}
                                 {(hand as string[]).length === 0 && <span className="text-[9px] text-gray-700 italic">empty</span>}
                               </div>
-
-                              {/* Move card destination */}
                               {moveCard?.fromId === pid && moveCard.gsId === gs.id && (
-                                <div className="mt-1 flex items-center gap-1">
+                                <div className="mt-1 flex items-center gap-1 flex-wrap">
                                   <span className="text-[9px] text-gray-600">Move {cardKeyLabel(moveCard.card)} to:</span>
                                   {roomPlayers.filter((p) => p.id !== pid).map((p) => (
                                     <button key={p.id}
@@ -294,53 +362,7 @@ export default function AdminPage() {
                       {expandedLog === gs.id && (
                         <div className="space-y-0.5 p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] max-h-80 overflow-y-auto">
                           {gs.action_log.length === 0 && <p className="text-[9px] text-gray-700 italic">No actions yet</p>}
-                          {gs.action_log.map((action: Record<string, unknown>, i: number) => {
-                            const turnNum = i + 1;
-                            if (action.type === "ask") {
-                              return (
-                                <div key={i} className="flex gap-2 py-0.5 text-[10px]">
-                                  <span className="text-gray-700 w-5 text-right shrink-0 font-mono">{turnNum}</span>
-                                  <div>
-                                    <span className="text-gray-400">{getPlayerName(action.asker_id as string)}</span>
-                                    <span className="text-gray-600"> → </span>
-                                    <span className="text-gray-400">{getPlayerName(action.target_id as string)}</span>
-                                    <span className="text-gray-600"> for </span>
-                                    <span className="text-gray-300">{cardKeyLabel(action.card as string)}</span>
-                                    <span className="text-gray-600"> — </span>
-                                    <span className={action.success ? "text-emerald-400" : "text-gray-600"}>{action.success ? "✓" : "✗"}</span>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            if (action.type === "declare") {
-                              return (
-                                <div key={i} className="flex gap-2 py-0.5 text-[10px]">
-                                  <span className="text-gray-700 w-5 text-right shrink-0 font-mono">{turnNum}</span>
-                                  <div className={`rounded px-1 ${action.success ? "bg-emerald-500/[0.05]" : action.awarded_to === null ? "bg-gray-500/[0.05]" : "bg-red-500/[0.05]"}`}>
-                                    <span className="text-gray-400">{getPlayerName(action.declarer_id as string)}</span>
-                                    <span className="text-gray-600"> declared </span>
-                                    <span className="text-gray-300">{setLabel((action.set_id as string) as FishSetId)}</span>
-                                    <span className="text-gray-600"> — </span>
-                                    {action.success
-                                      ? <span className="text-emerald-400">✓ Team {action.awarded_to as string}</span>
-                                      : action.awarded_to === null
-                                        ? <span className="text-gray-500">nullified</span>
-                                        : <span className="text-red-400">✗ Team {action.awarded_to as string}</span>
-                                    }
-                                  </div>
-                                </div>
-                              );
-                            }
-                            if (action.type === "choose_turn") {
-                              return (
-                                <div key={i} className="flex gap-2 py-0.5 text-[10px]">
-                                  <span className="text-gray-700 w-5 text-right shrink-0 font-mono">{turnNum}</span>
-                                  <span className="text-gray-600 italic">Team {action.team as string} → {getPlayerName(action.chosen_player_id as string)}</span>
-                                </div>
-                              );
-                            }
-                            return null;
-                          })}
+                          {gs.action_log.map((action, i) => renderLogEntry(action, i))}
                         </div>
                       )}
                     </div>

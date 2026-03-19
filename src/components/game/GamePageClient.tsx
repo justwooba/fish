@@ -341,6 +341,14 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                     </div>
                   );
                 }
+                if (action.type === "admin") {
+                  return (
+                    <div key={i} className="flex gap-2 py-1 text-xs">
+                      <span className="text-gray-700 w-6 text-right shrink-0 font-mono">{turnNum}</span>
+                      <div className="text-amber-400/60 italic">Admin: {String(action.description ?? "action")}</div>
+                    </div>
+                  );
+                }
                 return null;
               })}
             </div>

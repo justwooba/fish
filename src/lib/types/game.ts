@@ -149,7 +149,14 @@ export type ChooseTurnAction = {
   timestamp: string;
 };
 
-export type GameAction = AskAction | DeclareAction | ChooseTurnAction;
+export type AdminAction = {
+  type: "admin";
+  description: string;
+  timestamp: string;
+  [key: string]: unknown;
+};
+
+export type GameAction = AskAction | DeclareAction | ChooseTurnAction | AdminAction;
 
 // ─── Declared Set Record ─────────────────────────────────────────────────────
 
