@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 
@@ -10,7 +9,6 @@ interface JoinViaLinkProps {
 }
 
 export default function JoinViaLink({ roomCode }: JoinViaLinkProps) {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -41,8 +39,8 @@ export default function JoinViaLink({ roomCode }: JoinViaLinkProps) {
         throw new Error(data.error || "Failed to join room");
       }
 
-      // Reload the page so useRoom picks up the new player
-      router.refresh();
+      // Full reload so useRoom re-initializes and finds the new player
+      window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setLoading(false);
