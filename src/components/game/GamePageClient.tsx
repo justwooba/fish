@@ -15,6 +15,8 @@ import DeclareControls from "@/components/game/DeclareControls";
 import ChooseTurnControls from "@/components/game/ChooseTurnControls";
 import CardFlyAnimation from "@/components/game/CardFlyAnimation";
 import GameTimer from "@/components/game/GameTimer";
+import GameToast from "@/components/game/GameToast";
+import type { Toast } from "@/components/game/GameToast";
 import Button from "@/components/ui/Button";
 
 interface GamePageClientProps {
@@ -41,23 +43,68 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
   const [flyingCards, setFlyingCards] = useState<FlyingCard[]>([]);
   const [resetLoading, setResetLoading] = useState(false);
   const prevLastAskRef = useRef<LastAsk | null>(null);
+  const prevDeclaredCountRef = useRef(0);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  let toastIdRef = useRef(0);
 
-  // ── Fly animation ──────────────────────────────────────────────────────
+  function addToast(message: string, type: Toast["type"]) {
+    const id = ++toastIdRef.current;
+    setToasts(prev => [...prev, { id, message, type }]);
+  }
+  function removeToast(id: number) {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }
+
+  // ── Fly animation + ask toast ──────────────────────────────────────────
   useEffect(() => {
     if (!game?.last_ask) return;
     const curr = game.last_ask;
     const prev = prevLastAskRef.current;
     const isNew = !prev || prev.asker_id !== curr.asker_id || prev.target_id !== curr.target_id || prev.card !== curr.card;
-    if (isNew && curr.success) {
-      const fromPos = seatPositions[curr.target_id];
-      const toPos = seatPositions[curr.asker_id];
-      if (fromPos && toPos) {
-        const id = ++flyIdCounter;
-        setFlyingCards((prev) => [...prev, { cardKey: curr.card, fromX: fromPos.x, fromY: fromPos.y, toX: toPos.x, toY: toPos.y, id }]);
+    if (isNew) {
+      // Fly animation for successful asks
+      if (curr.success) {
+        const fromPos = seatPositions[curr.target_id];
+        const toPos = seatPositions[curr.asker_id];
+        if (fromPos && toPos) {
+          const id = ++flyIdCounter;
+          setFlyingCards((prev) => [...prev, { cardKey: curr.card, fromX: fromPos.x, fromY: fromPos.y, toX: toPos.x, toY: toPos.y, id }]);
+        }
+      }
+      // Toast
+      const askerName = players?.find(p => p.id === curr.asker_id)?.display_name ?? "?";
+      const targetName = players?.find(p => p.id === curr.target_id)?.display_name ?? "?";
+      const cardName = cardKeyLabel(curr.card);
+      if (curr.success) {
+        addToast(`${askerName} took ${cardName} from ${targetName}`, "success");
+      } else {
+        addToast(`${askerName} asked ${targetName} for ${cardName} — miss`, "fail");
       }
     }
     prevLastAskRef.current = curr;
-  }, [game?.last_ask, seatPositions]);
+  }, [game?.last_ask, seatPositions, players]);
+
+  // ── Declaration toast ──────────────────────────────────────────────────
+  useEffect(() => {
+    const declaredSets = game?.declared_sets ?? [];
+    const prevCount = prevDeclaredCountRef.current;
+    if (declaredSets.length > prevCount && prevCount > 0) {
+      // New declaration(s)
+      for (let i = prevCount; i < declaredSets.length; i++) {
+        const ds = declaredSets[i];
+        const declarer = ds.declared_by === "admin" ? "Admin" : (players?.find(p => p.id === ds.declared_by)?.display_name ?? "?");
+        const setName = setLabel(ds.set_id as FishSetId);
+        if (ds.was_correct) {
+          addToast(`${declarer} declared ${setName} — Team ${ds.awarded_to} scores!`, "declare_correct");
+        } else if (ds.awarded_to === null) {
+          addToast(`${declarer} misdeclared ${setName} — nullified!`, "declare_null");
+        } else {
+          addToast(`${declarer} misdeclared ${setName} — Team ${ds.awarded_to} scores!`, "declare_wrong");
+        }
+      }
+    }
+    prevDeclaredCountRef.current = declaredSets.length;
+  }, [game?.declared_sets, players]);
 
   function removeFlyingCard(id: number) {
     setFlyingCards((prev) => prev.filter((fc) => fc.id !== id));
@@ -421,6 +468,9 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
           <a href="/" className="text-xs text-gray-700 hover:text-gray-500 transition-colors">← Back to home</a>
         </div>
       </div>
+
+      {/* Toasts */}
+      <GameToast toasts={toasts} onRemove={removeToast} />
 
       {flyingCards.map((fc) => (
         <CardFlyAnimation key={fc.id} cardKey={fc.cardKey} fromX={fc.fromX} fromY={fc.fromY} toX={fc.toX} toY={fc.toY} onComplete={() => removeFlyingCard(fc.id)} />
