@@ -27,9 +27,11 @@ interface GameData {
   isHost: boolean;
   roomCode: string | null;
   declaring: DeclaringIntent | null;
+  lookingAt: Record<string, string | null>; // player_id -> opponent_id they're looking at
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  broadcastLookingAt: (opponentId: string | null) => void;
 }
 
 export function useGame(roomId: string): GameData {
@@ -40,6 +42,7 @@ export function useGame(roomId: string): GameData {
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
   const [isHost, setIsHost] = useState(false);
   const [roomCode, setRoomCode] = useState<string | null>(null);
+  const [lookingAt, setLookingAt] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -51,7 +54,7 @@ export function useGame(roomId: string): GameData {
       if (!res.ok) {
         const data = await res.json();
         setError(data.error || "Failed to load game");
-        setGame(null); // Clear game so redirect logic can detect reset
+        setGame(null);
         return;
       }
       const data = await res.json();
@@ -69,6 +72,16 @@ export function useGame(roomId: string): GameData {
     }
   }, [roomId]);
 
+  const broadcastLookingAt = useCallback((opponentId: string | null) => {
+    const channel = presenceChannelRef.current;
+    if (!channel) return;
+    channel.track({
+      player_id: myPlayerId,
+      looking_at: opponentId,
+      online_at: new Date().toISOString(),
+    });
+  }, [myPlayerId]);
+
   useEffect(() => {
     const supabase = createClient();
     let cancelled = false;
@@ -82,21 +95,11 @@ export function useGame(roomId: string): GameData {
       if (!uid) {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          const { data: myPlayer } = await supabase
-            .from("players")
-            .select("id")
-            .eq("room_id", roomId)
-            .eq("user_id", session.user.id)
-            .maybeSingle();
+          const { data: myPlayer } = await supabase.from("players").select("id").eq("room_id", roomId).eq("user_id", session.user.id).maybeSingle();
           if (myPlayer) foundPlayerId = myPlayer.id;
         }
       } else {
-        const { data: myPlayer } = await supabase
-          .from("players")
-          .select("id")
-          .eq("room_id", roomId)
-          .eq("user_id", uid)
-          .maybeSingle();
+        const { data: myPlayer } = await supabase.from("players").select("id").eq("room_id", roomId).eq("user_id", uid).maybeSingle();
         if (myPlayer) foundPlayerId = myPlayer.id;
       }
 
@@ -107,23 +110,10 @@ export function useGame(roomId: string): GameData {
 
       const channel = supabase
         .channel(`game:${roomId}`)
-        .on(
-          "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "game_states", filter: `room_id=eq.${roomId}` },
-          () => { fetchState(); }
-        )
-        .on(
-          "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "players", filter: `room_id=eq.${roomId}` },
-          () => { fetchState(); }
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
-          () => { fetchState(); }
-        )
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "game_states", filter: `room_id=eq.${roomId}` }, () => { fetchState(); })
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "players", filter: `room_id=eq.${roomId}` }, () => { fetchState(); })
+        .on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `id=eq.${roomId}` }, () => { fetchState(); })
         .subscribe();
-
       channelRef.current = channel;
 
       if (foundPlayerId) {
@@ -132,25 +122,28 @@ export function useGame(roomId: string): GameData {
           .on("presence", { event: "sync" }, () => {
             const presenceState = presenceChannel.presenceState();
             const connectedIds = new Set<string>();
+            const newLookingAt: Record<string, string | null> = {};
             for (const key of Object.keys(presenceState)) {
-              const presences = presenceState[key] as { player_id?: string }[];
+              const presences = presenceState[key] as { player_id?: string; looking_at?: string | null }[];
               for (const p of presences) {
-                if (p.player_id) connectedIds.add(p.player_id);
+                if (p.player_id) {
+                  connectedIds.add(p.player_id);
+                  newLookingAt[p.player_id] = p.looking_at ?? null;
+                }
               }
             }
-            setPlayers((prev) =>
-              prev.map((p) => ({ ...p, is_connected: connectedIds.has(p.id) }))
-            );
+            setPlayers(prev => prev.map(p => ({ ...p, is_connected: connectedIds.has(p.id) })));
+            setLookingAt(newLookingAt);
           })
           .subscribe(async (status) => {
             if (status === "SUBSCRIBED") {
               await presenceChannel.track({
                 player_id: foundPlayerId,
+                looking_at: null,
                 online_at: new Date().toISOString(),
               });
             }
           });
-
         presenceChannelRef.current = presenceChannel;
       }
     }
@@ -159,14 +152,10 @@ export function useGame(roomId: string): GameData {
 
     return () => {
       cancelled = true;
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-      }
-      if (presenceChannelRef.current) {
-        supabase.removeChannel(presenceChannelRef.current);
-      }
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+      if (presenceChannelRef.current) supabase.removeChannel(presenceChannelRef.current);
     };
   }, [roomId, fetchState]);
 
-  return { game, players, settings, myPlayerId, isHost, roomCode, declaring, loading, error, refetch: fetchState };
+  return { game, players, settings, myPlayerId, isHost, roomCode, declaring, lookingAt, loading, error, refetch: fetchState, broadcastLookingAt };
 }

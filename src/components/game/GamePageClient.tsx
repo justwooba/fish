@@ -36,12 +36,18 @@ let flyIdCounter = 0;
 
 export default function GamePageClient({ roomId }: GamePageClientProps) {
   const router = useRouter();
-  const { game, players, settings, myPlayerId, isHost, roomCode, declaring, loading, error } = useGame(roomId);
-  const [selectedOpponent, setSelectedOpponent] = useState<string | null>(null);
+  const { game, players, settings, myPlayerId, isHost, roomCode, declaring, lookingAt, loading, error, broadcastLookingAt } = useGame(roomId);
+  const [selectedOpponent, setSelectedOpponentRaw] = useState<string | null>(null);
   const [defaultSet, setDefaultSet] = useState<FishSetId | null>(null);
   const [seatPositions, setSeatPositions] = useState<SeatPositions>({});
   const [flyingCards, setFlyingCards] = useState<FlyingCard[]>([]);
   const [resetLoading, setResetLoading] = useState(false);
+
+  // Broadcast looking_at whenever selectedOpponent changes
+  const setSelectedOpponent = useCallback((id: string | null) => {
+    setSelectedOpponentRaw(id);
+    broadcastLookingAt(id);
+  }, [broadcastLookingAt]);
   const prevLastAskRef = useRef<LastAsk | null>(null);
   const prevDeclaredCountRef = useRef(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -342,8 +348,25 @@ export default function GamePageClient({ roomId }: GamePageClientProps) {
                 </p>
               </div>
             ) : (
-              <div className="text-center py-6">
-                <p className="text-gray-500 text-sm">Waiting for <span className="text-gray-300">{currentTurnPlayer?.display_name ?? "?"}</span> to play...</p>
+              <div className="text-center py-6 space-y-2">
+                <p className="text-gray-500 text-sm">
+                  Waiting for <span className="text-gray-300">{currentTurnPlayer?.display_name ?? "?"}</span> to play...
+                </p>
+                {/* Show what the current turn player is looking at */}
+                {game.current_turn && lookingAt[game.current_turn] && (() => {
+                  const targetId = lookingAt[game.current_turn];
+                  const turnName = currentTurnPlayer?.display_name ?? "?";
+                  const isLookingAtMe = targetId === myPlayerId;
+                  const targetName = isLookingAtMe ? "you" : (players?.find(p => p.id === targetId)?.display_name ?? "?");
+                  return (
+                    <p className={`text-xs animate-pulse ${isLookingAtMe ? "text-amber-400" : "text-gray-600"}`}>
+                      {turnName} is looking at {isLookingAtMe ? <span className="font-medium">you</span> : targetName}...
+                    </p>
+                  );
+                })()}
+                {game.current_turn && !lookingAt[game.current_turn] && (
+                  <p className="text-xs text-gray-700 italic">thinking...</p>
+                )}
               </div>
             )}
           </div>
