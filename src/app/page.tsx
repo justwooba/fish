@@ -1,10 +1,11 @@
-import CreateRoomButton from "@/components/home/CreateRoomButton";
-import JoinRoomForm from "@/components/home/JoinRoomForm";
+import { CreateRoomButton, JoinRoomForm } from "@/components/home";
 import { SuitSpade, SuitHeart, SuitDiamond, SuitClub } from "@/components/icons/Suits";
+import Nav from "@/components/ui/Nav";
 
 export default function Home() {
   return (
     <main className="min-h-dvh flex flex-col items-center justify-center px-4 py-16 relative overflow-hidden">
+      <Nav />
       {/* ── Floating suit decorations ──────────────────────────────────── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
         <SuitSpade className="absolute top-[12%] left-[8%] w-8 h-8 text-white/[0.03] animate-float" />
@@ -72,16 +73,22 @@ export default function Home() {
               </p>
               <p>
                 When your team has a complete set, declare it for a point.
-                First team to five sets wins. 
+                First team to five sets wins. Memory, deduction, and teamwork
+                are everything.
               </p>
             </div>
           </div>
         </div>
 
         {/* ── Footer ────────────────────────────────────────────────── */}
-        <p className="text-xs text-gray-700 animate-fade-in delay-5">
-          Built by Wooba Song '26
-        </p>
+        <div className="text-center animate-fade-in delay-5 space-y-1">
+          <p className="text-xs text-gray-700">
+            No account needed &middot; Play instantly
+          </p>
+          <p className="text-[10px] text-gray-800">
+            Built by Wooba Song &apos;26
+          </p>
+        </div>
       </div>
     </main>
   );
