@@ -20,6 +20,12 @@ export default function Nav({ showHome }: NavProps) {
       </div>
       <div className="flex items-center gap-4">
         <Link
+          href="/tutorial"
+          className="text-xs text-amber-500/70 hover:text-amber-400 transition-colors"
+        >
+          Tutorial
+        </Link>
+        <Link
           href="/rules"
           className="text-xs text-gray-600 hover:text-gray-300 transition-colors"
         >

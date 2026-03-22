@@ -80,11 +80,18 @@ export default function Home() {
           </div>
         </div>
 
+        {/* ── Tutorial ──────────────────────────────────────────────── */}
+        <div className="text-center animate-fade-up delay-5">
+          <a
+            href="/tutorial"
+            className="text-sm text-amber-500/70 hover:text-amber-400 transition-colors"
+          >
+            New to Fish? Play the tutorial →
+          </a>
+        </div>
+
         {/* ── Footer ────────────────────────────────────────────────── */}
         <div className="text-center animate-fade-in delay-5 space-y-1">
-          <p className="text-xs text-gray-700">
-            No account needed &middot; Play instantly
-          </p>
           <p className="text-[10px] text-gray-800">
             Built by Wooba Song &apos;26
           </p>
