@@ -25,11 +25,7 @@ export default function AboutPage() {
               that combines elements of Go Fish with strategic deduction. Unlike most
               card games, Fish rewards communication, memory, and teamwork over luck.
             </p>
-            <p className="text-sm text-gray-400 leading-relaxed">
-              The game is especially popular among students and competitive card game
-              communities. It&apos;s one of the few card games designed specifically for
-              exactly six players.
-            </p>
+
           </section>
 
           <section className="rounded-2xl border border-white/[0.04] bg-white/[0.02] px-6 py-5 space-y-3">
@@ -37,12 +33,13 @@ export default function AboutPage() {
               This App
             </h2>
             <p className="text-sm text-gray-400 leading-relaxed">
-              This web app lets you play Fish online with friends in real time.
-              No accounts needed — just create a room, share the code, and play.
-              All game actions update instantly for all players.
+              Immediately prior to the creation of this web app, its creator had just returned from a weeklong trip
+              to Finland. Upon landing in America, he was immediately struck by an depression uncurable by no means
+              other than Fish. He decided to take matters into his own hands, and hence this web app was born.
             </p>
             <p className="text-sm text-gray-400 leading-relaxed">
-              Built with Next.js, Supabase, and Tailwind CSS. Deployed on Vercel.
+              Built with Next.js, Supabase, and Tailwind CSS. Deployed on Vercel. If there are bugs, it is due to the
+              creator not knowing how APIs work.
             </p>
           </section>
 
@@ -51,7 +48,7 @@ export default function AboutPage() {
               Credits
             </h2>
             <p className="text-sm text-gray-400 leading-relaxed">
-              Built by Wooba Song &apos;26
+              Built by Wooba Song &apos;26. Inspired by leipajuusto and cloudberry jam.
             </p>
           </section>
         </div>

@@ -23,7 +23,7 @@ export default function RulesPage() {
               Overview
             </h2>
             <p>
-              Fish (also known as Literature) is a team card game for exactly six players,
+              Fish (also known as Literature) is a team card game for six players,
               split into two teams of three. Players sit in alternating team order around
               the table (A-B-A-B-A-B). The goal is to collect complete sets of cards
               through asking and deduction.
@@ -31,7 +31,7 @@ export default function RulesPage() {
             <p>
               The game uses a standard 54-card deck (52 cards + 2 jokers), divided into
               9 sets of 6 cards each. Each player is dealt 9 cards at the start.
-              First team to win 5 sets wins (or all 9 in extended play).
+              The first team to win 5 sets wins.
             </p>
           </section>
 
@@ -72,7 +72,7 @@ export default function RulesPage() {
             <p>
               On your turn, you ask one opponent for a specific card. You must already
               hold at least one card from the same set as the card you&apos;re asking for.
-              You cannot ask a teammate.
+              You cannot ask a teammate, and you cannot ask for a card you already have.
             </p>
             <p>
               If the opponent has the card, they give it to you and you go again.
@@ -80,7 +80,7 @@ export default function RulesPage() {
             </p>
             <p className="text-gray-500 italic">
               Only the most recent ask is visible to all players. Past asks are hidden
-              during the game — memory is a key part of the strategy.
+              during the game, and memory is a key part of the strategy.
             </p>
           </section>
 
@@ -91,7 +91,8 @@ export default function RulesPage() {
             </h2>
             <p>
               At any point during your turn, you can declare a set. To declare, you
-              announce which teammate holds each of the 6 cards in the set. Once you
+              announce which of your teammates holds each of the 6 cards in the set.
+              You must have at least one card in the set to declare it. Once you
               begin declaring, you cannot take it back.
             </p>
             <p>
@@ -99,8 +100,8 @@ export default function RulesPage() {
               If any assignment is wrong, it&apos;s a misdeclare.
             </p>
             <p>
-              If you have no legal asks available (for example, all opponents are out
-              of cards in your sets), you must declare.
+              If you have no legal asks available (i.e., you hand only consists
+              of sets), you must declare.
             </p>
           </section>
 
@@ -121,7 +122,7 @@ export default function RulesPage() {
                 <span className="text-gray-300 font-medium">Nullify Misdeclare:</span>
                 <span className="ml-1">
                   If your team held all 6 cards but assigned them to the wrong teammates,
-                  the set is nullified — no one scores it. Play continues from the current turn.
+                  the set is nullified and gives no points. Play continues from the current turn.
                 </span>
               </div>
               <div>
